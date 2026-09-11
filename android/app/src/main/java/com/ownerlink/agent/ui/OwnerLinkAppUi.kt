@@ -261,7 +261,6 @@ private fun PairingScreen(
 
     LaunchedEffect(Unit) {
         ConnectionService.start(context)
-        app.socket.connect()
     }
 
     Column(Modifier.padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -282,7 +281,6 @@ private fun PairingScreen(
         Text(statusLabel(conn, msg))
         Button(onClick = {
             ConnectionService.start(context)
-            app.socket.connect()
         }) { Text("Start remote access") }
         OutlinedButton(onClick = {
             clipboard.setText(AnnotatedString(payload))

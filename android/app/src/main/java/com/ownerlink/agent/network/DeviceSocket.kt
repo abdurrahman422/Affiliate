@@ -23,156 +23,121 @@ import okio.ByteString
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 
-enum class ConnectionState {
-    Idle, Connecting, WaitingForPair, Online, Offline, Revoked
-}
+enum class ConnectionState { Idle, Connecting, WaitingForPair, Online, Offline, Revoked }
 
-class DeviceSocket(
-    context: Context,
-    private val store: SecureStore,
-    private val scope: CoroutineScope,
-) {
+class DeviceSocket(context: Context, private val store: SecureStore, private val scope: CoroutineScope) {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val stopRequested = AtomicBoolean(false)
-    private var backoffMs = 1000L
+    private val lifecycle = SocketLifecycle()
     private var socket: WebSocket? = null
     private val _state = MutableStateFlow(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state
     private val _message = MutableStateFlow("")
     val message: StateFlow<String> = _message
 
-    private val client = OkHttpClient.Builder()
-        .pingInterval(20, TimeUnit.SECONDS)
-        .readTimeout(0, TimeUnit.MILLISECONDS)
-        .retryOnConnectionFailure(true)
-        .build()
-
-    private val commands = CommandHandler(
-        appContext,
-        store,
-        scope,
-        sendJson = { text -> socket?.send(text) },
-        sendBytes = { bytes -> socket?.send(ByteString.of(*bytes)) },
-    )
+    private val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS)
+        .readTimeout(0, TimeUnit.MILLISECONDS).retryOnConnectionFailure(true).build()
+    private val commands = CommandHandler(appContext, store, scope,
+        sendJson = { socket?.send(it) }, sendBytes = { socket?.send(ByteString.of(*it)) })
 
     private val heartbeat = object : Runnable {
         override fun run() {
-            if (_state.value == ConnectionState.Online || _state.value == ConnectionState.WaitingForPair) {
+            if (lifecycle.status == SocketStatus.CONNECTED &&
+                (_state.value == ConnectionState.Online || _state.value == ConnectionState.WaitingForPair)) {
                 val (battery, charging) = Battery.snapshot(appContext)
-                socket?.send(
-                    Protocol.envelope(
-                        Protocol.HEARTBEAT,
-                        store.deviceId,
-                        buildJsonObject {
-                            if (battery != null) put("battery", battery)
-                            if (charging != null) put("charging", charging)
-                        },
-                    ),
-                )
+                socket?.send(Protocol.envelope(Protocol.HEARTBEAT, store.deviceId, buildJsonObject {
+                    if (battery != null) put("battery", battery)
+                    if (charging != null) put("charging", charging)
+                }))
                 handler.postDelayed(this, 15_000)
             }
         }
     }
+    private val reconnectRunnable = Runnable { synchronized(this) { open(lifecycle.reconnectFired()) } }
 
-    @Synchronized
-    fun connect() {
+    /** Idempotent: CONNECTING and CONNECTED states never create/replace a socket. */
+    @Synchronized fun connect() {
         stopRequested.set(false)
-        if (store.serverUrl.isBlank()) {
-            _message.value = "Set a server URL first"
-            return
-        }
-        open()
+        if (store.serverUrl.isBlank()) { _message.value = "Set a server URL first"; return }
+        open(lifecycle.connectRequested())
     }
 
-    @Synchronized
-    fun disconnect(user: Boolean) {
+    @Synchronized fun disconnect(user: Boolean) {
         if (user) stopRequested.set(true)
         handler.removeCallbacks(reconnectRunnable)
         handler.removeCallbacks(heartbeat)
         commands.stopStream()
-        socket?.close(1000, "disconnect")
+        val old = socket
         socket = null
+        lifecycle.disconnect() // makes every old OkHttp callback stale
+        old?.close(1000, "disconnect")
         _state.value = if (user) ConnectionState.Idle else ConnectionState.Offline
     }
 
-    fun retryNow() {
+    /** Called by the foreground-service network monitor. Healthy sockets are untouched. */
+    @Synchronized fun retryNow() {
         if (stopRequested.get()) return
         handler.removeCallbacks(reconnectRunnable)
-        backoffMs = 1000L
-        handler.post { open() }
+        open(lifecycle.retryNow())
     }
 
-    private val reconnectRunnable = Runnable {
-        if (!stopRequested.get()) open()
-    }
-
-    private fun open() {
-        if (stopRequested.get()) return
-        val wsUrl = Urls.toDeviceWebSocket(store.serverUrl)
+    @Synchronized private fun open(attempt: Long?) {
+        if (attempt == null || stopRequested.get()) return
         _state.value = ConnectionState.Connecting
-        _message.value = "Connecting to $wsUrl"
-        Log.i(TAG, "opening $wsUrl")
-        val req = Request.Builder().url(wsUrl).build()
-        socket?.cancel()
-        socket = client.newWebSocket(req, listener)
+        _message.value = "Connecting"
+        Log.i(TAG, "socket connecting")
+        val created = client.newWebSocket(Request.Builder().url(Urls.toDeviceWebSocket(store.serverUrl)).build(), listener(attempt))
+        // OkHttp can invoke onOpen before newWebSocket returns. Keep the same socket either way.
+        if (lifecycle.isCurrent(attempt)) { if (socket == null) socket = created } else created.cancel()
     }
 
-    private val listener = object : WebSocketListener() {
-        override fun onOpen(webSocket: WebSocket, response: Response) {
+    private fun listener(attempt: Long) = object : WebSocketListener() {
+        override fun onOpen(webSocket: WebSocket, response: Response) = synchronized(this@DeviceSocket) {
+            if (!lifecycle.opened(attempt)) { webSocket.close(1000, "stale socket"); return@synchronized }
+            socket = webSocket
+            handler.removeCallbacks(reconnectRunnable)
             Log.i(TAG, "socket open")
-            backoffMs = 1000L
-            val session = store.sessionToken
-            if (store.paired && !session.isNullOrBlank()) {
-                webSocket.send(
-                    Protocol.envelope(
-                        Protocol.DEVICE_AUTH,
-                        store.deviceId,
-                        buildJsonObject { put("session_token", session) },
-                    ),
-                )
+            if (requiredHandshake(store.paired, store.sessionToken) == DeviceHandshake.DEVICE_AUTH) {
+                webSocket.send(Protocol.envelope(Protocol.DEVICE_AUTH, store.deviceId, buildJsonObject { put("session_token", store.sessionToken!!) }))
+                Log.i(TAG, "DEVICE_AUTH sent")
             } else {
                 if (store.pairingToken.isBlank()) store.regeneratePairingToken()
-                webSocket.send(
-                    Protocol.envelope(
-                        Protocol.UNPAIRED_HELLO,
-                        store.deviceId,
-                        buildJsonObject {
-                            put("pairing_token", store.pairingToken)
-                            put("name", store.friendlyName)
-                            put("app_version", "1.0.0")
-                        },
-                    ),
-                )
+                webSocket.send(Protocol.envelope(Protocol.UNPAIRED_HELLO, store.deviceId, buildJsonObject {
+                    put("pairing_token", store.pairingToken); put("name", store.friendlyName); put("app_version", "1.0.0")
+                }))
+                Log.i(TAG, "UNPAIRED_HELLO sent")
             }
             handler.removeCallbacks(heartbeat)
             handler.post(heartbeat)
         }
-
-        override fun onMessage(webSocket: WebSocket, text: String) {
-            handleText(text)
+        override fun onMessage(webSocket: WebSocket, text: String) = synchronized(this@DeviceSocket) {
+            if (lifecycle.isCurrent(attempt)) handleText(text)
         }
-
         override fun onMessage(webSocket: WebSocket, bytes: ByteString) = Unit
-
-        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) {
-            webSocket.close(code, reason)
+        override fun onClosing(webSocket: WebSocket, code: Int, reason: String) = synchronized(this@DeviceSocket) {
+            if (lifecycle.isCurrent(attempt)) webSocket.close(code, reason)
         }
-
         override fun onClosed(webSocket: WebSocket, code: Int, reason: String) {
-            commands.stopStream()
-            handler.removeCallbacks(heartbeat)
-            if (code == 4001 || _state.value == ConnectionState.Revoked) return
-            scheduleReconnect()
+            Log.i(TAG, "socket closed code=$code")
+            terminal(attempt, code, null)
         }
-
         override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
-            Log.w(TAG, "socket failure", t)
-            commands.stopStream()
-            handler.removeCallbacks(heartbeat)
-            _message.value = "Cannot reach server: ${t.message ?: "network error"}"
-            scheduleReconnect()
+            Log.w(TAG, "socket failure: ${t.javaClass.simpleName}")
+            terminal(attempt, null, t)
         }
+    }
+
+    @Synchronized private fun terminal(attempt: Long, closeCode: Int?, error: Throwable?) {
+        if (closeCode == 4001 || stopRequested.get() || _state.value == ConnectionState.Revoked) return
+        val delay = lifecycle.terminated(attempt) ?: return // stale/duplicate terminal callback
+        socket = null
+        commands.stopStream(); handler.removeCallbacks(heartbeat)
+        _state.value = ConnectionState.Offline
+        _message.value = if (error == null) "Disconnected" else "Cannot reach server"
+        handler.removeCallbacks(reconnectRunnable)
+        handler.postDelayed(reconnectRunnable, delay)
+        Log.i(TAG, "reconnect scheduled in ${delay}ms")
     }
 
     private fun handleText(text: String) {
@@ -181,65 +146,20 @@ class DeviceSocket(
         val requestId = root.str("request_id")
         val payload = root["payload"] as? JsonObject ?: buildJsonObject {}
         when (type) {
-            Protocol.UNPAIRED_ACK -> {
-                _state.value = ConnectionState.WaitingForPair
-                _message.value = "Waiting for owner to scan QR"
-            }
-            Protocol.PAIR_SUCCESS -> {
-                val session = payload.str("session_token") ?: return
-                store.markPaired(session)
-                _state.value = ConnectionState.Online
-                _message.value = "Paired and connected"
-            }
-            Protocol.AUTH_OK -> {
-                store.paired = true
-                _state.value = ConnectionState.Online
-                _message.value = "Connected"
-            }
+            Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
+            Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
+            Protocol.AUTH_OK -> { store.paired = true; _state.value = ConnectionState.Online; _message.value = "Connected" }
             Protocol.REVOKED -> {
-                store.markRevoked()
-                _state.value = ConnectionState.Revoked
-                _message.value = "Device removed. A new QR is ready."
-                stopRequested.set(false)
-                handler.postDelayed({ open() }, 500)
+                store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
+                stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)
             }
-            Protocol.ERROR -> {
-                val code = payload.str("code")
-                val msg = payload.str("message") ?: "Error"
-                if (code == "ALREADY_PAIRED" || code == "AUTH_FAILED" || code == "NOT_PAIRED") {
-                    if (!store.paired) _message.value = msg
-                    if (code == "AUTH_FAILED" || code == "NOT_PAIRED") {
-                        store.markRevoked()
-                        _state.value = ConnectionState.WaitingForPair
-                    }
-                }
+            Protocol.ERROR -> if (payload.str("code") in setOf("AUTH_FAILED", "NOT_PAIRED")) {
+                store.markRevoked(); _state.value = ConnectionState.WaitingForPair
             }
-            Protocol.LIST_GALLERY,
-            Protocol.LIST_FILES,
-            Protocol.DOWNLOAD_FILE,
-            Protocol.GET_THUMBNAIL,
-            Protocol.GET_SCREEN_FRAME,
-            Protocol.START_SCREEN_STREAM,
-            Protocol.STOP_SCREEN_STREAM,
-            Protocol.REMOTE_GESTURE,
-            Protocol.GET_STATUS,
-            -> commands.handle(type, requestId, payload)
+            Protocol.LIST_GALLERY, Protocol.LIST_FILES, Protocol.DOWNLOAD_FILE, Protocol.GET_THUMBNAIL,
+            Protocol.GET_SCREEN_FRAME, Protocol.START_SCREEN_STREAM, Protocol.STOP_SCREEN_STREAM,
+            Protocol.REMOTE_GESTURE, Protocol.GET_STATUS -> commands.handle(type, requestId, payload)
         }
     }
-
-    private fun scheduleReconnect() {
-        if (stopRequested.get()) {
-            _state.value = ConnectionState.Idle
-            return
-        }
-        _state.value = ConnectionState.Offline
-        handler.removeCallbacks(reconnectRunnable)
-        handler.postDelayed(reconnectRunnable, backoffMs)
-        backoffMs = (backoffMs * 2).coerceAtMost(30_000L)
-        _message.value = "Reconnecting in ${backoffMs / 1000}s…"
-    }
-
-    companion object {
-        private const val TAG = "OwnerLinkSocket"
-    }
+    companion object { private const val TAG = "OwnerLinkSocket" }
 }
