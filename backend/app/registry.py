@@ -47,6 +47,8 @@ class DeviceLink:
     transfers: dict[str, Transfer] = field(default_factory=dict)
     thumbs: dict[str, Transfer] = field(default_factory=dict)
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+    contact_id: str | None = None
+    public_key: str | None = None
 
     def touch(self) -> None:
         self.last_seen = time.time()
@@ -61,6 +63,7 @@ class Registry:
         self.links: dict[str, DeviceLink] = {}
         self.screen_subs: dict[str, set[asyncio.Queue]] = {}
         self._guard = asyncio.Lock()
+        self.contacts: dict[str, DeviceLink] = {}
 
     def get(self, device_id: str) -> DeviceLink | None:
         return self.links.get(device_id)
@@ -89,7 +92,36 @@ class Registry:
             current = self.links.get(device_id)
             if current is not None and current.websocket is websocket:
                 self.links.pop(device_id, None)
+                if current.contact_id and self.contacts.get(current.contact_id) is current:
+                    self.contacts.pop(current.contact_id, None)
                 self._fail_pending(current, CommandError("DISCONNECTED", "Device disconnected"))
+
+    async def register_contact(self, link: DeviceLink, contact_id: str, public_key: str) -> None:
+        async with self._guard:
+            previous = self.contacts.get(contact_id)
+            if previous is not None and previous is not link:
+                previous.contact_id = None
+            if link.contact_id and self.contacts.get(link.contact_id) is link:
+                self.contacts.pop(link.contact_id, None)
+            link.contact_id = contact_id
+            link.public_key = public_key
+            self.contacts[contact_id] = link
+
+    async def route_peer(self, sender: DeviceLink, message: dict) -> bool:
+        """Relay an opaque message/signaling envelope to one exact registered contact."""
+        target_id = str((message.get("payload") or {}).get("to") or "")
+        target = self.contacts.get(target_id)
+        if not sender.contact_id or target is None:
+            return False
+        forwarded = dict(message)
+        payload = dict(message.get("payload") or {})
+        payload["from"] = sender.contact_id
+        payload.pop("to", None)
+        forwarded["device_id"] = target.device_id
+        forwarded["payload"] = payload
+        async with target.lock:
+            await target.websocket.send_json(forwarded)
+        return True
 
     def _fail_pending(self, link: DeviceLink, error: CommandError) -> None:
         for fut in list(link.pending.values()):

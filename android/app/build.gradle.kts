@@ -1,8 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+}
+
+val externalSigningFile = file(System.getProperty("user.home") + "/.privatchat/signing.properties")
+val externalSigning = Properties().apply {
+    if (externalSigningFile.isFile) externalSigningFile.inputStream().use { load(it) }
 }
 
 android {
@@ -19,6 +26,15 @@ android {
         manifestPlaceholders["usesCleartext"] = "false"
     }
 
+    signingConfigs {
+        if (externalSigningFile.isFile) create("privatChatRelease") {
+            storeFile = file(externalSigning.getProperty("storeFile"))
+            storePassword = externalSigning.getProperty("storePassword")
+            keyAlias = externalSigning.getProperty("keyAlias")
+            keyPassword = externalSigning.getProperty("keyPassword")
+        }
+    }
+
     buildTypes {
         debug {
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
@@ -29,6 +45,7 @@ android {
             isMinifyEnabled = false
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
             buildConfigField("boolean", "FEATURE_CAMERA_MIC", "false")
+            if (externalSigningFile.isFile) signingConfig = signingConfigs.getByName("privatChatRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",

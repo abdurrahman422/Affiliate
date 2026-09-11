@@ -8,6 +8,7 @@ import kotlinx.serialization.json.Json
 @Serializable
 data class PairingPayload(
     val v: Int = 1,
+    val type: String = "dashboard_pair",
     val server: String,
     val device_id: String,
     val pairing_token: String,

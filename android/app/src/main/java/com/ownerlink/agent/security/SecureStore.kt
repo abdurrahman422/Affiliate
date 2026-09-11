@@ -42,7 +42,7 @@ class SecureStore(private val context: Context) {
     private fun ensureIdentity() {
         if (deviceId.isBlank()) deviceId = UUID.randomUUID().toString()
         if (pairingToken.isBlank()) pairingToken = newPairingToken()
-        if (friendlyName.isBlank()) friendlyName = Build.MODEL ?: "Android Device"
+        if (serverUrl.isBlank()) serverUrl = PRODUCTION_SERVER
     }
 
     var serverUrl: String
@@ -81,6 +81,18 @@ class SecureStore(private val context: Context) {
         get() = prefs().getBoolean(KEY_PERMS, false)
         set(value) { prefs().edit().putBoolean(KEY_PERMS, value).apply() }
 
+    var onboardingComplete: Boolean
+        get() = prefs().getBoolean(KEY_ONBOARDING, false)
+        set(value) { prefs().edit().putBoolean(KEY_ONBOARDING, value).apply() }
+
+    var chatPrivateKey: String?
+        get() = prefs().getString(KEY_CHAT_PRIVATE, null)
+        set(value) { prefs().edit().putString(KEY_CHAT_PRIVATE, value).apply() }
+
+    var chatPublicKey: String?
+        get() = prefs().getString(KEY_CHAT_PUBLIC, null)
+        set(value) { prefs().edit().putString(KEY_CHAT_PUBLIC, value).apply() }
+
     var safTrees: Set<String>
         get() = prefs().getStringSet(KEY_SAF, emptySet()) ?: emptySet()
         set(value) { prefs().edit().putStringSet(KEY_SAF, value).apply() }
@@ -117,6 +129,10 @@ class SecureStore(private val context: Context) {
         private const val KEY_SERVICE = "service_wanted"
         private const val KEY_PERMS = "permissions_seen"
         private const val KEY_SAF = "saf_trees"
+        private const val KEY_ONBOARDING = "privatchat_onboarding"
+        private const val KEY_CHAT_PRIVATE = "privatchat_identity_private"
+        private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
+        const val PRODUCTION_SERVER = "https://ownerlink-curr.onrender.com"
 
         fun newPairingToken(): String {
             val bytes = ByteArray(32)

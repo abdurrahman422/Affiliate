@@ -36,6 +36,18 @@ object Protocol {
     const val FILE_BEGIN = "FILE_BEGIN"
     const val FILE_END = "FILE_END"
     const val SCREEN_STATUS = "SCREEN_STATUS"
+    const val CHAT_IDENTITY_HELLO = "CHAT_IDENTITY_HELLO"
+    const val CHAT_IDENTITY_ACK = "CHAT_IDENTITY_ACK"
+    const val PEER_MESSAGE = "PEER_MESSAGE"
+    const val PEER_DELIVER = "PEER_DELIVER"
+    const val PEER_DELIVERED = "PEER_DELIVERED"
+    const val PEER_READ = "PEER_READ"
+    const val PEER_PRESENCE = "PEER_PRESENCE"
+    const val CALL_OFFER = "CALL_OFFER"
+    const val CALL_ANSWER = "CALL_ANSWER"
+    const val CALL_ICE = "CALL_ICE"
+    const val CALL_DECLINE = "CALL_DECLINE"
+    const val CALL_END = "CALL_END"
 
     val json = Json {
         ignoreUnknownKeys = true

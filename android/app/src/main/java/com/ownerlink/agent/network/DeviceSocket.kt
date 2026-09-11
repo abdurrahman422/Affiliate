@@ -5,6 +5,7 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.ownerlink.agent.security.SecureStore
+import com.ownerlink.agent.chat.ChatIdentity
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Urls
 import kotlinx.coroutines.CoroutineScope
@@ -25,7 +26,13 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 enum class ConnectionState { Idle, Connecting, WaitingForPair, Online, Offline, Revoked }
 
-class DeviceSocket(context: Context, private val store: SecureStore, private val scope: CoroutineScope) {
+class DeviceSocket(
+    context: Context,
+    private val store: SecureStore,
+    private val scope: CoroutineScope,
+    private val chatIdentity: ChatIdentity,
+    private val peerHandler: (String, JsonObject) -> Unit,
+) {
     private val appContext = context.applicationContext
     private val handler = Handler(Looper.getMainLooper())
     private val stopRequested = AtomicBoolean(false)
@@ -35,6 +42,9 @@ class DeviceSocket(context: Context, private val store: SecureStore, private val
     val state: StateFlow<ConnectionState> = _state
     private val _message = MutableStateFlow("")
     val message: StateFlow<String> = _message
+
+    @Synchronized fun send(text: String): Boolean =
+        lifecycle.status == SocketStatus.CONNECTED && socket?.send(text) == true
 
     private val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS).retryOnConnectionFailure(true).build()
@@ -108,6 +118,11 @@ class DeviceSocket(context: Context, private val store: SecureStore, private val
                 }))
                 Log.i(TAG, "UNPAIRED_HELLO sent")
             }
+            webSocket.send(Protocol.envelope(Protocol.CHAT_IDENTITY_HELLO, store.deviceId, buildJsonObject {
+                put("contact_id", chatIdentity.contactId); put("public_key", chatIdentity.publicKey)
+                put("name", store.friendlyName.ifBlank { "PrivatChat user" })
+            }))
+            Log.i(TAG, "CHAT_IDENTITY_HELLO sent")
             handler.removeCallbacks(heartbeat)
             handler.post(heartbeat)
         }
@@ -149,6 +164,10 @@ class DeviceSocket(context: Context, private val store: SecureStore, private val
             Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
             Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
             Protocol.AUTH_OK -> { store.paired = true; _state.value = ConnectionState.Online; _message.value = "Connected" }
+            Protocol.CHAT_IDENTITY_ACK -> scope.coroutineContext.let { /* registration acknowledged */ }
+            Protocol.PEER_MESSAGE, Protocol.PEER_DELIVER, Protocol.PEER_DELIVERED, Protocol.PEER_READ,
+            Protocol.PEER_PRESENCE, Protocol.CALL_OFFER, Protocol.CALL_ANSWER, Protocol.CALL_ICE,
+            Protocol.CALL_DECLINE, Protocol.CALL_END -> peerHandler(type, payload)
             Protocol.REVOKED -> {
                 store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
                 stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)

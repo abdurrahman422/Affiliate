@@ -2,6 +2,10 @@ package com.ownerlink.agent
 
 import android.app.Application
 import com.ownerlink.agent.network.DeviceSocket
+import com.ownerlink.agent.chat.ChatController
+import com.ownerlink.agent.chat.ChatIdentity
+import com.ownerlink.agent.chat.ChatIdentityProvider
+import com.ownerlink.agent.chat.ChatStore
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.service.KeepAliveWorker
 import kotlinx.coroutines.CoroutineScope
@@ -13,13 +17,21 @@ class OwnerLinkApp : Application() {
         private set
     lateinit var socket: DeviceSocket
         private set
+    lateinit var identity: ChatIdentity
+        private set
+    lateinit var chat: ChatController
+        private set
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         store = SecureStore(this)
-        socket = DeviceSocket(this, store, appScope)
+        identity = ChatIdentityProvider.loadOrCreate(store)
+        lateinit var controller: ChatController
+        socket = DeviceSocket(this, store, appScope, identity) { type, payload -> controller.handle(type, payload) }
+        controller = ChatController(ChatStore(this), identity) { socket.send(it) }
+        chat = controller
         KeepAliveWorker.schedule(this)
     }
 

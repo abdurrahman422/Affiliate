@@ -825,6 +825,39 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         )
         return
 
+    if msg_type == P.CHAT_IDENTITY_HELLO:
+        contact_id = str(payload.get("contact_id") or "").strip()
+        public_key = str(payload.get("public_key") or "").strip()
+        if not (8 <= len(contact_id) <= 128 and 32 <= len(public_key) <= 4096):
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "INVALID_CHAT_IDENTITY", "message": "Invalid chat identity"
+            }, data.get("request_id")))
+            return
+        await registry.register_contact(link, contact_id, public_key)
+        await websocket.send_json(P.envelope(P.CHAT_IDENTITY_ACK, link.device_id, {
+            "contact_id": contact_id
+        }, data.get("request_id")))
+        return
+
+    peer_types = {
+        P.PEER_MESSAGE, P.PEER_DELIVERED, P.PEER_READ, P.PEER_PRESENCE,
+        P.CALL_OFFER, P.CALL_ANSWER, P.CALL_ICE, P.CALL_DECLINE, P.CALL_END,
+    }
+    if msg_type in peer_types:
+        raw_size = len(json.dumps(data, separators=(",", ":")))
+        if raw_size > 262_144:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "MESSAGE_TOO_LARGE", "message": "Envelope exceeds 256 KiB"
+            }, data.get("request_id")))
+            return
+        delivered = await registry.route_peer(link, data)
+        if msg_type == P.PEER_MESSAGE:
+            await websocket.send_json(P.envelope(P.PEER_DELIVER, link.device_id, {
+                "message_id": payload.get("message_id"),
+                "delivered": delivered,
+            }, data.get("request_id")))
+        return
+
     if msg_type == P.HEARTBEAT:
         link.touch()
         if payload.get("battery") is not None:
