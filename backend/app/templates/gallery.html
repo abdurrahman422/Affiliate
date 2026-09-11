@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block title %}Gallery — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Gallery</p>
+    <h1>Gallery</h1>
+    <p class="muted">Media stays on the phone. Downloads are relayed and not kept on the server.</p>
+  </div>
+</div>
+<p id="gallery-status" class="meta"></p>
+<div id="gallery-grid" class="media-grid"></div>
+<button id="load-more" class="hidden" type="button">Load more</button>
+<dialog id="preview">
+  <img id="preview-img" alt="Preview">
+  <div class="actions">
+    <a id="preview-download" class="primary" href="#">Download original</a>
+    <button id="preview-close" type="button">Close</button>
+  </div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.OWNERLINK_DEVICE_ID = {{ device.device_id|tojson }};
+</script>
+<script src="/static/js/gallery.js"></script>
+{% endblock %}

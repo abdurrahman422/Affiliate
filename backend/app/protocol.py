@@ -1,0 +1,29 @@
+UNPAIRED_HELLO = "UNPAIRED_HELLO"
+DEVICE_AUTH = "DEVICE_AUTH"
+HEARTBEAT = "HEARTBEAT"
+RESPONSE = "RESPONSE"
+ERROR = "ERROR"
+PAIR_SUCCESS = "PAIR_SUCCESS"
+AUTH_OK = "AUTH_OK"
+REVOKED = "REVOKED"
+LIST_GALLERY = "LIST_GALLERY"
+LIST_FILES = "LIST_FILES"
+DOWNLOAD_FILE = "DOWNLOAD_FILE"
+GET_THUMBNAIL = "GET_THUMBNAIL"
+GET_SCREEN_FRAME = "GET_SCREEN_FRAME"
+START_SCREEN_STREAM = "START_SCREEN_STREAM"
+STOP_SCREEN_STREAM = "STOP_SCREEN_STREAM"
+REMOTE_GESTURE = "REMOTE_GESTURE"
+GET_STATUS = "GET_STATUS"
+FILE_BEGIN = "FILE_BEGIN"
+FILE_END = "FILE_END"
+SCREEN_STATUS = "SCREEN_STATUS"
+
+
+def envelope(msg_type: str, device_id: str, payload: dict | None = None, request_id: str | None = None) -> dict:
+    return {
+        "type": msg_type,
+        "request_id": request_id,
+        "device_id": device_id,
+        "payload": payload or {},
+    }

@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Add Device — OwnerLink{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Add Device</h1>
+    <p class="muted">Scan the QR shown in the OwnerLink Android app, or paste the pairing data.</p>
+  </div>
+</div>
+<section class="split">
+  <article class="card">
+    <h2>Scan QR</h2>
+    <p class="muted">Allow camera access in this browser. Frames stay on this page.</p>
+    <video id="qr-video" playsinline autoplay muted></video>
+    <div class="actions">
+      <button id="start-scan" class="primary" type="button">Start camera</button>
+      <button id="stop-scan" type="button">Stop</button>
+    </div>
+    <p id="scan-status" class="meta"></p>
+  </article>
+  <article class="card">
+    <h2>Paste pairing data</h2>
+    <label>Friendly name
+      <input id="device-name" type="text" placeholder="Home Phone">
+    </label>
+    <label>Pairing JSON
+      <textarea id="pair-json" rows="8" placeholder='{"v":1,"server":"...","device_id":"...","pairing_token":"..."}'></textarea>
+    </label>
+    <button id="pair-btn" class="primary" type="button">Pair device</button>
+    <p id="pair-result" class="meta"></p>
+  </article>
+</section>
+<p class="muted">This server: <code>{{ base_url }}</code></p>
+{% endblock %}
+{% block scripts %}
+<script src="/static/js/jsQR.js"></script>
+<script src="/static/js/pair.js"></script>
+{% endblock %}

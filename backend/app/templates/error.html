@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Error — OwnerLink{% endblock %}
+{% block content %}
+<article class="card">
+  <h1>Something went wrong</h1>
+  <p>{{ message or "The page could not be loaded." }}</p>
+  <a href="/">Back to devices</a>
+</article>
+{% endblock %}

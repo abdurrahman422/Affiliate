@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: ownerlink
+    runtime: docker
+    plan: free
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: production
+      - key: STORAGE_BACKEND
+        value: redis
+      - key: OWNERLINK_BASE_URL
+        sync: false
+      - key: OWNERLINK_SECRET_KEY
+        generateValue: true
+      - key: OWNERLINK_ADMIN_USERNAME
+        sync: false
+      - key: OWNERLINK_ADMIN_PASSWORD
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false

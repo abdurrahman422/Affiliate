@@ -1,0 +1,8 @@
+<resources>
+    <string name="app_name">OwnerLink</string>
+    <string name="notification_title">OwnerLink remote access active</string>
+    <string name="notification_text">This phone is connected to your OwnerLink server.</string>
+    <string name="notification_disconnect">Disconnect</string>
+    <string name="accessibility_service_description">OwnerLink uses the accessibility screenshot and gesture APIs so you can view this phone at low FPS from your own website and send taps, swipes, Back, Home, and Recents. It does not bypass secure screens, hide itself, or type passwords. Enable this only on phones you own.</string>
+    <string name="accessibility_service_label">OwnerLink remote screen</string>
+</resources>

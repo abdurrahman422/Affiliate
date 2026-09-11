@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}{{ device.name }} — OwnerLink{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/">Devices</a> / {{ device.name }}</p>
+    <h1 id="device-title">{{ device.name }}</h1>
+    <p class="meta">
+      <span class="pill {% if device.online %}ok{% else %}off{% endif %}">{% if device.online %}Online{% else %}Offline{% endif %}</span>
+      {% if device.battery is not none %} · Battery {{ device.battery }}%{% if device.charging %} charging{% endif %}{% endif %}
+      {% if device.last_seen %} · Last seen {{ device.last_seen }}{% endif %}
+    </p>
+  </div>
+</div>
+<section class="grid tiles">
+  <a class="card tile" href="/device/{{ device.device_id }}/gallery">
+    <h2>Gallery</h2>
+    <p>Photos and videos currently on this phone.</p>
+  </a>
+  <a class="card tile" href="/device/{{ device.device_id }}/files">
+    <h2>Files</h2>
+    <p>Browse folders and download originals.</p>
+  </a>
+  <a class="card tile" href="/device/{{ device.device_id }}/screen">
+    <h2>Remote Screen</h2>
+    <p>Low-FPS view and basic taps, swipes, Back / Home / Recents.</p>
+  </a>
+</section>
+<article class="card">
+  <h2>Rename</h2>
+  <form id="rename-form" class="row-form">
+    <input id="rename-input" type="text" value="{{ device.name }}" maxlength="128">
+    <button class="primary" type="submit">Save name</button>
+  </form>
+  <p id="rename-status" class="meta"></p>
+</article>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.OWNERLINK_DEVICE_ID = {{ device.device_id|tojson }};
+</script>
+<script src="/static/js/device.js"></script>
+{% endblock %}

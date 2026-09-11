@@ -1,0 +1,54 @@
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: ownerlink-backend
+    env_file:
+      - .env
+    environment:
+      ENV: ${ENV:-production}
+      STORAGE_BACKEND: ${STORAGE_BACKEND:-redis}
+      OWNERLINK_BASE_URL: ${OWNERLINK_BASE_URL}
+      OWNERLINK_SECRET_KEY: ${OWNERLINK_SECRET_KEY}
+      OWNERLINK_ADMIN_USERNAME: ${OWNERLINK_ADMIN_USERNAME}
+      OWNERLINK_ADMIN_PASSWORD: ${OWNERLINK_ADMIN_PASSWORD}
+      UPSTASH_REDIS_REST_URL: ${UPSTASH_REDIS_REST_URL}
+      UPSTASH_REDIS_REST_TOKEN: ${UPSTASH_REDIS_REST_TOKEN}
+    restart: unless-stopped
+    expose:
+      - "8000"
+    networks:
+      - ownerlink
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health')"]
+      interval: 20s
+      timeout: 5s
+      retries: 5
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: ownerlink-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${OWNERLINK_DOMAIN}
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - backend
+    networks:
+      - ownerlink
+
+volumes:
+  caddy-data:
+  caddy-config:
+
+networks:
+  ownerlink:
+    driver: bridge

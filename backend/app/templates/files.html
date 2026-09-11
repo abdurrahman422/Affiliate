@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Files — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <p class="crumb"><a href="/">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Files</p>
+    <h1>Files</h1>
+    <p class="muted">Only storage Android allows is listed. Files are streamed from the phone on download.</p>
+  </div>
+</div>
+<p id="path-bar" class="path-bar"></p>
+<p id="files-status" class="meta"></p>
+<table class="file-table">
+  <thead>
+    <tr><th>Name</th><th>Type</th><th>Size</th><th></th></tr>
+  </thead>
+  <tbody id="file-body"></tbody>
+</table>
+{% endblock %}
+{% block scripts %}
+<script>
+  window.OWNERLINK_DEVICE_ID = {{ device.device_id|tojson }};
+</script>
+<script src="/static/js/files.js"></script>
+{% endblock %}

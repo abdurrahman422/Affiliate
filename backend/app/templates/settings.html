@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Settings — OwnerLink{% endblock %}
+{% block content %}
+<div class="page-head">
+  <div>
+    <h1>Settings</h1>
+    <p class="muted">Signed in as <strong>{{ owner_name }}</strong>. There is no public sign-up.</p>
+  </div>
+</div>
+<article class="card narrow">
+  <h2>Change password</h2>
+  {% if message %}<p class="banner ok">{{ message }}</p>{% endif %}
+  {% if error %}<p class="banner bad">{{ error }}</p>{% endif %}
+  <form method="post" action="/settings/password" class="stack">
+    <input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+    <label>Current password
+      <input type="password" name="current_password" required>
+    </label>
+    <label>New password
+      <input type="password" name="new_password" minlength="12" required>
+    </label>
+    <label>Confirm new password
+      <input type="password" name="confirm_password" minlength="12" required>
+    </label>
+    <button class="primary" type="submit">Update password</button>
+  </form>
+  <p class="muted">You can also run <code>python -m app.cli set-password</code> on the server.</p>
+</article>
+{% endblock %}
