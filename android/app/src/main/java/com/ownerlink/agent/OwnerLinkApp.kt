@@ -30,7 +30,7 @@ class OwnerLinkApp : Application() {
         identity = ChatIdentityProvider.loadOrCreate(store)
         lateinit var controller: ChatController
         socket = DeviceSocket(this, store, appScope, identity) { type, payload -> controller.handle(type, payload) }
-        controller = ChatController(ChatStore(this), identity) { socket.send(it) }
+        controller = ChatController(ChatStore(this), identity, store.deviceId) { socket.send(it) }
         chat = controller
         KeepAliveWorker.schedule(this)
     }

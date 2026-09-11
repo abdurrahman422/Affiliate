@@ -9,7 +9,12 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.util.UUID
 
-class ChatController(private val store: ChatStore, private val identity: ChatIdentity, private val sendRaw: (String) -> Boolean) {
+class ChatController(
+    private val store: ChatStore,
+    private val identity: ChatIdentity,
+    private val deviceId: String,
+    private val sendRaw: (String) -> Boolean,
+) {
     private val _generation = MutableStateFlow(0)
     val generation: StateFlow<Int> = _generation
 
@@ -39,6 +44,7 @@ class ChatController(private val store: ChatStore, private val identity: ChatIde
 
     fun handle(type: String, payload: JsonObject) {
         when (type) {
+            Protocol.CHAT_IDENTITY_ACK -> retryPending(deviceId)
             Protocol.PEER_MESSAGE -> {
                 val id = payload.str("message_id") ?: return
                 val from = payload.str("from") ?: return

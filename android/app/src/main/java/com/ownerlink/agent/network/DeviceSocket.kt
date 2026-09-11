@@ -161,6 +161,7 @@ class DeviceSocket(
         val requestId = root.str("request_id")
         val payload = root["payload"] as? JsonObject ?: buildJsonObject {}
         when (type) {
+            Protocol.CHAT_IDENTITY_ACK -> peerHandler(type, payload)
             Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
             Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
             Protocol.AUTH_OK -> { store.paired = true; _state.value = ConnectionState.Online; _message.value = "Connected" }
