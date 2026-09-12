@@ -83,12 +83,15 @@ interface ChatDao {
     @Query("SELECT state FROM messages WHERE id=:id LIMIT 1") fun messageState(id: String): String?
     @Query("UPDATE messages SET progress=:progress,state=:state WHERE id=:id") fun updateProgress(id: String, progress: Int, state: String)
     @Query("SELECT * FROM messages WHERE contactId=:id ORDER BY createdAt,id") fun messages(id: String): List<MessageEntity>
+    @Query("SELECT * FROM messages WHERE id=:id LIMIT 1") fun message(id: String): MessageEntity?
     @Query("SELECT * FROM messages WHERE outgoing=1 AND state IN ('PENDING','FAILED') ORDER BY createdAt") fun pending(): List<MessageEntity>
     @Query("SELECT id FROM messages WHERE contactId=:id AND outgoing=0 AND state='DELIVERED'") fun unreadIds(id: String): List<String>
     @Query("UPDATE messages SET state='READ' WHERE contactId=:id AND outgoing=0 AND state='DELIVERED'") fun markRead(id: String)
     @Insert(onConflict = OnConflictStrategy.REPLACE) fun saveTransfer(value: PendingTransferEntity)
     @Query("SELECT * FROM pending_transfers WHERE transferId=:id LIMIT 1") fun transfer(id: String): PendingTransferEntity?
+    @Query("SELECT * FROM pending_transfers") fun transfers(): List<PendingTransferEntity>
     @Query("DELETE FROM pending_transfers WHERE transferId=:id") fun deleteTransfer(id: String)
+    @Query("DELETE FROM pending_transfers WHERE messageId=:messageId") fun deleteTransferForMessage(messageId: String)
 }
 
 @Database(entities = [ContactEntity::class, MessageEntity::class, PendingTransferEntity::class], version = 1, exportSchema = true)
@@ -111,11 +114,14 @@ class ChatStore(context: Context) {
     }
     fun updateProgress(id: String, progress: Int, state: MessageState) = dao.updateProgress(id, progress.coerceIn(0, 100), state.name)
     fun messages(contactId: String): List<ChatMessage> = dao.messages(contactId).map(MessageEntity::model)
+    fun message(id: String): ChatMessage? = dao.message(id)?.model()
     fun pending(): List<ChatMessage> = dao.pending().map(MessageEntity::model)
     fun markRead(contactId: String): List<String> = dao.unreadIds(contactId).also { dao.markRead(contactId) }
     fun saveTransfer(value: PendingTransferEntity) = dao.saveTransfer(value)
     fun transfer(id: String) = dao.transfer(id)
+    fun transfers() = dao.transfers()
     fun deleteTransfer(id: String) = dao.deleteTransfer(id)
+    fun deleteTransferForMessage(messageId: String) = dao.deleteTransferForMessage(messageId)
 }
 
 private fun ChatMessage.entity() = MessageEntity(id, contactId, body, outgoing, createdAt, state.name, kind, attachmentUri, attachmentName, attachmentMime, attachmentSize, progress, error)

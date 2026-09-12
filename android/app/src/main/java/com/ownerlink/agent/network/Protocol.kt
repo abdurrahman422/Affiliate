@@ -60,6 +60,8 @@ object Protocol {
     const val CALL_DECLINE = "CALL_DECLINE"
     const val CALL_END = "CALL_END"
     const val DASHBOARD_DISCONNECT = "DASHBOARD_DISCONNECT"
+    const val RTC_CONFIG_REQUEST = "RTC_CONFIG_REQUEST"
+    const val RTC_CONFIG = "RTC_CONFIG"
 
     val json = Json {
         ignoreUnknownKeys = true

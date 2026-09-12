@@ -48,7 +48,10 @@ class ChatController(
     fun sendAttachment(contactId: String, uri: Uri, image: Boolean): Result<ChatMessage> = runCatching { transfers.enqueue(contactId, uri, image) }
 
     fun retryPending() = store.pending().forEach(::send)
-    fun retryMessage(messageId: String, contactId: String) = store.messages(contactId).firstOrNull { it.id == messageId }?.let { store.updateState(it.id, MessageState.PENDING); send(it) }
+    fun retryMessage(messageId: String, contactId: String) = store.messages(contactId).firstOrNull { it.id == messageId }?.let {
+        if (it.kind == "text") { store.updateState(it.id, MessageState.PENDING); send(it) } else transfers.retry(it)
+    }
+    fun cancelAttachment(messageId: String) = transfers.cancel(messageId)
 
     fun onPeerReady(contactId: String) {
         store.pending().filter { it.contactId == contactId && it.kind == "text" }.forEach(::send)

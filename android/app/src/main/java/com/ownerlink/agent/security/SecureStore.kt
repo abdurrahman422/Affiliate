@@ -16,7 +16,24 @@ class SecureStore(private val context: Context) {
 
     init {
         encrypted = createEncrypted()
+        requireNotNull(encrypted) { "Android encrypted storage is unavailable" }
+        migrateLegacyFallback()
         ensureIdentity()
+    }
+
+    private fun migrateLegacyFallback() {
+        if (fallback.all.isEmpty()) return
+        val editor = requireNotNull(encrypted).edit()
+        fallback.all.forEach { (key, value) ->
+            when (value) {
+                is String -> editor.putString(key, value)
+                is Boolean -> editor.putBoolean(key, value)
+                is Long -> editor.putLong(key, value)
+                is Int -> editor.putInt(key, value)
+                is Set<*> -> @Suppress("UNCHECKED_CAST") editor.putStringSet(key, value as Set<String>)
+            }
+        }
+        if (editor.commit()) fallback.edit().clear().apply()
     }
 
     private fun createEncrypted(): SharedPreferences? {
@@ -36,7 +53,7 @@ class SecureStore(private val context: Context) {
 
     private fun prefs(): SharedPreferences {
         if (encrypted == null) encrypted = createEncrypted()
-        return encrypted ?: fallback
+        return requireNotNull(encrypted) { "Android encrypted storage is unavailable" }
     }
 
     private fun ensureIdentity() {
@@ -73,6 +90,10 @@ class SecureStore(private val context: Context) {
         get() = prefs().getBoolean(KEY_PAIRED, false)
         set(value) { prefs().edit().putBoolean(KEY_PAIRED, value).apply() }
 
+    var lastDashboardConnection: Long
+        get() = prefs().getLong(KEY_DASHBOARD_LAST, 0L)
+        set(value) { prefs().edit().putLong(KEY_DASHBOARD_LAST, value).apply() }
+
     var serviceWanted: Boolean
         get() = prefs().getBoolean(KEY_SERVICE, false)
         set(value) { prefs().edit().putBoolean(KEY_SERVICE, value).apply() }
@@ -88,6 +109,10 @@ class SecureStore(private val context: Context) {
     var profileUri: String?
         get() = prefs().getString(KEY_PROFILE_URI, null)
         set(value) { prefs().edit().putString(KEY_PROFILE_URI, value).apply() }
+
+    var appearance: String
+        get() = prefs().getString(KEY_APPEARANCE, "SYSTEM") ?: "SYSTEM"
+        set(value) { prefs().edit().putString(KEY_APPEARANCE, value).apply() }
 
     var chatPrivateKey: String?
         get() = prefs().getString(KEY_CHAT_PRIVATE, null)
@@ -109,6 +134,7 @@ class SecureStore(private val context: Context) {
         sessionToken = session
         paired = true
         pairingToken = ""
+        lastDashboardConnection = System.currentTimeMillis()
     }
 
     fun markRevoked() {
@@ -130,11 +156,13 @@ class SecureStore(private val context: Context) {
         private const val KEY_SESSION = "session_token"
         private const val KEY_NAME = "friendly_name"
         private const val KEY_PAIRED = "paired"
+        private const val KEY_DASHBOARD_LAST = "dashboard_last_connected"
         private const val KEY_SERVICE = "service_wanted"
         private const val KEY_PERMS = "permissions_seen"
         private const val KEY_SAF = "saf_trees"
         private const val KEY_ONBOARDING = "privatchat_onboarding"
         private const val KEY_PROFILE_URI = "privatchat_profile_uri"
+        private const val KEY_APPEARANCE = "privatchat_appearance"
         private const val KEY_CHAT_PRIVATE = "privatchat_identity_private"
         private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
         const val PRODUCTION_SERVER = "https://ownerlink-curr.onrender.com"

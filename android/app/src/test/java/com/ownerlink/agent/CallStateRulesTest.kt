@@ -14,4 +14,12 @@ class CallStateRulesTest {
         assertTrue(CallStateRules.canTransition(CallPhase.ACTIVE, CallPhase.ENDED))
     }
     @Test fun endedCallCannotBecomeActive() { assertFalse(CallStateRules.canTransition(CallPhase.ENDED, CallPhase.ACTIVE)) }
+    @Test fun activeCallCanRecoverAfterNetworkSwitch() {
+        assertTrue(CallStateRules.canTransition(CallPhase.ACTIVE, CallPhase.RECONNECTING))
+        assertTrue(CallStateRules.canTransition(CallPhase.RECONNECTING, CallPhase.ACTIVE))
+    }
+    @Test fun terminalCallCannotBeReactivatedByStaleAccept() {
+        assertFalse(CallStateRules.canTransition(CallPhase.ENDED, CallPhase.CONNECTING))
+        assertFalse(CallStateRules.canTransition(CallPhase.FAILED, CallPhase.ACTIVE))
+    }
 }

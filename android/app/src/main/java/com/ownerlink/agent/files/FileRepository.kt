@@ -45,7 +45,7 @@ class FileRepository(private val context: Context, private val store: SecureStor
                 return buildJsonObject {
                     put("ok", false)
                     put("code", "PERMISSION_MISSING")
-                    put("message", "Grant All files access or pick a folder in the OwnerLink app.")
+                    put("message", "Grant All files access or pick a folder in PrivatChat.")
                 }
             }
             return buildJsonObject { put("items", JsonArray(items)) }

@@ -47,7 +47,8 @@ import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.ConcurrentHashMap
 
-enum class CallPhase { IDLE, OUTGOING, INCOMING, CONNECTING, ACTIVE, ENDED, FAILED }
+enum class CallPhase { IDLE, OUTGOING, INCOMING, CONNECTING, RECONNECTING, ACTIVE, ENDED, FAILED }
+enum class IceDiagnosticState { NEW, GATHERING, CHECKING, CONNECTED, COMPLETED, DISCONNECTED, FAILED, CLOSED }
 data class CallUiState(
     val phase: CallPhase = CallPhase.IDLE,
     val contactId: String? = null,
@@ -80,6 +81,10 @@ class PeerRtcManager(
     private var audioSource: AudioSource? = null
     private var audioTrack: AudioTrack? = null
     private var frontCamera = true
+    @Volatile private var configuredIceServers = listOf(RtcIceServer(listOf(BuildConfig.PRIVATCHAT_STUN_URL)))
+    private val _iceState = MutableStateFlow(IceDiagnosticState.NEW)
+    val iceState: StateFlow<IceDiagnosticState> = _iceState
+    @Volatile private var lastNetworkRestart = 0L
 
     init {
         PeerConnectionFactory.initialize(
@@ -115,17 +120,23 @@ class PeerRtcManager(
     fun handle(type: String, payload: JsonObject, contactName: (String) -> String) {
         val from = payload.str("from") ?: payload.str("contact_id")
         when (type) {
+            Protocol.RTC_CONFIG -> updateIceServers(IceServerConfig.parse(payload))
             Protocol.PEER_SIGNAL -> if (from != null) handlePeerSignal(from, payload)
             Protocol.PEER_CONNECT_REQUEST -> if (from != null) ensureDataSession(from)
-            Protocol.CALL_INVITE -> if (from != null && _call.value.phase == CallPhase.IDLE) {
+            Protocol.CALL_INVITE -> if (from != null && _call.value.phase in setOf(CallPhase.IDLE, CallPhase.ENDED, CallPhase.FAILED)) {
                 val callId = payload.str("call_id") ?: return
                 _call.value = CallUiState(CallPhase.INCOMING, from, contactName(from), callId)
                 showIncomingNotification(contactName(from))
             }
-            Protocol.CALL_RINGING -> if (_call.value.callId == payload.str("call_id")) _call.value = _call.value.copy(phase = CallPhase.OUTGOING)
-            Protocol.CALL_ACCEPT -> if (_call.value.callId == payload.str("call_id") && from != null) {
-                if (!hasCallPermissions()) { failCall("Camera and microphone permissions are required"); return }
-                startMedia(from); _call.value = _call.value.copy(phase = CallPhase.CONNECTING); createOffer(session(from))
+            Protocol.CALL_RINGING -> if (_call.value.phase == CallPhase.OUTGOING && _call.value.callId == payload.str("call_id")) _call.value = _call.value.copy(phase = CallPhase.OUTGOING)
+            Protocol.CALL_ACCEPT -> if (_call.value.phase == CallPhase.OUTGOING && _call.value.callId == payload.str("call_id") && from != null) {
+                if (!hasCallPermissions()) {
+                    route(Protocol.CALL_END, from, buildJsonObject { put("call_id", _call.value.callId ?: "") })
+                    failCall("Camera and microphone permissions are required")
+                    return
+                }
+                if (!startMedia(from)) return
+                _call.value = _call.value.copy(phase = CallPhase.CONNECTING); createOffer(session(from))
             }
             Protocol.CALL_DECLINE -> if (_call.value.callId == payload.str("call_id")) finish(CallPhase.ENDED, "Call declined")
             Protocol.CALL_END -> if (_call.value.callId == payload.str("call_id")) finish(CallPhase.ENDED, null)
@@ -137,7 +148,7 @@ class PeerRtcManager(
         val callId = UUID.randomUUID().toString()
         _call.value = CallUiState(CallPhase.OUTGOING, contactId, name, callId)
         route(Protocol.CALL_INVITE, contactId, buildJsonObject { put("call_id", callId) })
-        scope.launch { delay(CALL_TIMEOUT_MS); if (_call.value.callId == callId && _call.value.phase != CallPhase.ACTIVE) { route(Protocol.CALL_END, contactId, buildJsonObject { put("call_id", callId) }); failCall("Call timed out") } }
+        scope.launch { delay(CALL_TIMEOUT_MS); if (_call.value.callId == callId && _call.value.phase in setOf(CallPhase.OUTGOING, CallPhase.CONNECTING, CallPhase.RECONNECTING)) { route(Protocol.CALL_END, contactId, buildJsonObject { put("call_id", callId) }); failCall("Call timed out") } }
     }
 
     fun ringIncoming() {
@@ -149,7 +160,7 @@ class PeerRtcManager(
         val value = _call.value
         if (value.phase != CallPhase.INCOMING || value.contactId == null || value.callId == null) return false
         if (!hasCallPermissions()) return false
-        startMedia(value.contactId)
+        if (!startMedia(value.contactId)) return false
         cancelIncomingNotification()
         _call.value = value.copy(phase = CallPhase.CONNECTING)
         route(Protocol.CALL_ACCEPT, value.contactId, buildJsonObject { put("call_id", value.callId) })
@@ -186,28 +197,77 @@ class PeerRtcManager(
         sessions.clear(); factory.dispose(); eglBase.release()
     }
 
-    private fun session(contactId: String): PeerSession = sessions.computeIfAbsent(contactId) {
-        val config = PeerConnection.RTCConfiguration(listOf(PeerConnection.IceServer.builder(BuildConfig.PRIVATCHAT_STUN_URL).createIceServer())).apply {
-            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
-            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+    fun onNetworkAvailable() {
+        val now = System.currentTimeMillis()
+        if (now - lastNetworkRestart < NETWORK_RESTART_DEBOUNCE_MS) return
+        lastNetworkRestart = now
+        sendSignal(Protocol.envelope(Protocol.RTC_CONFIG_REQUEST, ""))
+        sessions.values.forEach { session ->
+            runCatching { session.pc.setConfiguration(buildRtcConfiguration()) }
+            runCatching { session.pc.restartIce() }
         }
+        if (_call.value.phase == CallPhase.RECONNECTING) _call.value = _call.value.copy(phase = CallPhase.CONNECTING)
+    }
+
+    private fun updateIceServers(values: List<RtcIceServer>) {
+        if (values.isEmpty()) return
+        configuredIceServers = values
+        sessions.values.forEach { runCatching { it.pc.setConfiguration(buildRtcConfiguration()) } }
+        Log.i(TAG, "ICE configuration updated servers=${values.size} turn=${values.any { server -> server.urls.any { it.startsWith("turn") } }}")
+    }
+
+    private fun session(contactId: String): PeerSession = sessions.computeIfAbsent(contactId) {
+        val config = buildRtcConfiguration()
         val holder = arrayOfNulls<PeerSession>(1)
         val observer = observer(contactId) { holder[0] }
         val pc = requireNotNull(factory.createPeerConnection(config, observer)) { "Unable to create peer connection" }
         PeerSession(contactId, pc).also { holder[0] = it }
     }
 
+    private fun buildRtcConfiguration(): PeerConnection.RTCConfiguration {
+        val servers = configuredIceServers.mapNotNull { value ->
+            runCatching {
+                PeerConnection.IceServer.builder(value.urls).apply {
+                    if (value.username.isNotEmpty()) setUsername(value.username)
+                    if (value.credential.isNotEmpty()) setPassword(value.credential)
+                }.createIceServer()
+            }.getOrNull()
+        }.ifEmpty { listOf(PeerConnection.IceServer.builder(BuildConfig.PRIVATCHAT_STUN_URL).createIceServer()) }
+        return PeerConnection.RTCConfiguration(servers).apply {
+            sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
+            continualGatheringPolicy = PeerConnection.ContinualGatheringPolicy.GATHER_CONTINUALLY
+            iceTransportsType = PeerConnection.IceTransportsType.ALL
+        }
+    }
+
     private fun observer(contactId: String, session: () -> PeerSession?) = object : PeerConnection.Observer {
         override fun onSignalingChange(newState: PeerConnection.SignalingState?) = Unit
         override fun onIceConnectionChange(newState: PeerConnection.IceConnectionState?) {
+            _iceState.value = when (newState) {
+                PeerConnection.IceConnectionState.CHECKING -> IceDiagnosticState.CHECKING
+                PeerConnection.IceConnectionState.CONNECTED -> IceDiagnosticState.CONNECTED
+                PeerConnection.IceConnectionState.COMPLETED -> IceDiagnosticState.COMPLETED
+                PeerConnection.IceConnectionState.DISCONNECTED -> IceDiagnosticState.DISCONNECTED
+                PeerConnection.IceConnectionState.FAILED -> IceDiagnosticState.FAILED
+                PeerConnection.IceConnectionState.CLOSED -> IceDiagnosticState.CLOSED
+                else -> IceDiagnosticState.NEW
+            }
+            Log.i(TAG, "ICE state=${_iceState.value.name.lowercase()}")
             when (newState) {
-                PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> if (_call.value.contactId == contactId && _call.value.phase == CallPhase.CONNECTING) _call.value = _call.value.copy(phase = CallPhase.ACTIVE)
-                PeerConnection.IceConnectionState.FAILED -> if (_call.value.contactId == contactId) failCall("Direct connection failed. A TURN server may be required on this network.")
+                PeerConnection.IceConnectionState.CONNECTED, PeerConnection.IceConnectionState.COMPLETED -> if (_call.value.contactId == contactId && _call.value.phase in setOf(CallPhase.CONNECTING, CallPhase.RECONNECTING)) _call.value = _call.value.copy(phase = CallPhase.ACTIVE)
+                PeerConnection.IceConnectionState.DISCONNECTED -> if (_call.value.contactId == contactId && _call.value.phase == CallPhase.ACTIVE) {
+                    _call.value = _call.value.copy(phase = CallPhase.RECONNECTING)
+                    scope.launch { delay(ICE_RESTART_DELAY_MS); if (_call.value.contactId == contactId && _call.value.phase == CallPhase.RECONNECTING) runCatching { session()?.pc?.restartIce() } }
+                }
+                PeerConnection.IceConnectionState.FAILED -> if (_call.value.contactId == contactId) failCall("Unable to connect the video call. Please check your network and try again.")
                 else -> Unit
             }
         }
         override fun onIceConnectionReceivingChange(receiving: Boolean) = Unit
-        override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) = Unit
+        override fun onIceGatheringChange(newState: PeerConnection.IceGatheringState?) {
+            if (newState == PeerConnection.IceGatheringState.GATHERING) _iceState.value = IceDiagnosticState.GATHERING
+            Log.i(TAG, "ICE gathering=${newState?.name?.lowercase() ?: "unknown"}")
+        }
         override fun onIceCandidate(candidate: IceCandidate?) { candidate ?: return; signal(contactId, "ice", null, candidate) }
         override fun onIceCandidatesRemoved(candidates: Array<out IceCandidate>?) = Unit
         override fun onAddStream(stream: MediaStream?) = Unit
@@ -259,11 +319,11 @@ class PeerRtcManager(
         put("to", to); extra.forEach { (key, value) -> put(key, value) }
     }))
 
-    private fun startMedia(contactId: String) {
+    private fun startMedia(contactId: String): Boolean {
         val session = session(contactId)
         if (audioTrack == null) { audioSource = factory.createAudioSource(MediaConstraints()); audioTrack = factory.createAudioTrack("privatchat-audio", audioSource).also { session.pc.addTrack(it, listOf("privatchat")) } }
         if (_localVideo.value == null) {
-            val chosen = createCapturer() ?: run { failCall("No camera is available"); return }
+            val chosen = createCapturer() ?: run { failCall("No camera is available"); return false }
             capturer = chosen; videoSource = factory.createVideoSource(false)
             chosen.initialize(SurfaceTextureHelper.create("PrivatChatCamera", eglDenseContext()), appContext, videoSource!!.capturerObserver)
             chosen.startCapture(640, 480, 24)
@@ -272,6 +332,7 @@ class PeerRtcManager(
             audioTrack?.let { if (session.pc.senders.none { sender -> sender.track()?.id() == it.id() }) session.pc.addTrack(it, listOf("privatchat")) }
             _localVideo.value?.let { if (session.pc.senders.none { sender -> sender.track()?.id() == it.id() }) session.pc.addTrack(it, listOf("privatchat")) }
         }
+        return true
     }
 
     private fun createCapturer(): VideoCapturer? {
@@ -283,6 +344,7 @@ class PeerRtcManager(
     private fun hasCallPermissions() = ContextCompat.checkSelfPermission(appContext, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED && ContextCompat.checkSelfPermission(appContext, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
     private fun failCall(reason: String) { finish(CallPhase.FAILED, reason) }
     private fun finish(phase: CallPhase, error: String?) {
+        val callContact = _call.value.contactId
         cancelIncomingNotification()
         runCatching { capturer?.stopCapture() }; capturer?.dispose(); capturer = null
         _localVideo.value?.dispose(); _localVideo.value = null; _remoteVideo.value = null
@@ -290,6 +352,17 @@ class PeerRtcManager(
         videoSource?.dispose(); videoSource = null; audioSource?.dispose(); audioSource = null
         sessions.values.forEach { session -> session.pc.senders.filter { it.track()?.kind() in setOf("audio", "video") }.forEach { session.pc.removeTrack(it) } }
         _call.value = _call.value.copy(phase = phase, error = error)
+        if (callContact != null) closeSession(callContact)
+    }
+
+    private fun closeSession(contactId: String) {
+        sessions.remove(contactId)?.let { session ->
+            runCatching { session.channel?.unregisterObserver() }
+            runCatching { session.channel?.close() }
+            runCatching { session.channel?.dispose() }
+            runCatching { session.pc.close() }
+            runCatching { session.pc.dispose() }
+        }
     }
 
     private fun showIncomingNotification(name: String) {
@@ -298,7 +371,7 @@ class PeerRtcManager(
         manager.createNotificationChannel(NotificationChannel(CALL_CHANNEL, "PrivatChat calls", NotificationManager.IMPORTANCE_HIGH))
         val open = PendingIntent.getActivity(appContext, CALL_NOTIFICATION, Intent(appContext, MainActivity::class.java), PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
         val notification = NotificationCompat.Builder(appContext, CALL_CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher).setContentTitle("Incoming video call").setContentText(name)
+            .setSmallIcon(R.drawable.ic_privatchat_notification).setContentTitle("Incoming video call").setContentText(name)
             .setPriority(NotificationCompat.PRIORITY_HIGH).setCategory(NotificationCompat.CATEGORY_CALL)
             .setContentIntent(open).setAutoCancel(true).build()
         manager.notify(CALL_NOTIFICATION, notification)
@@ -314,5 +387,13 @@ class PeerRtcManager(
         override fun onSetFailure(error: String?) { Log.w(TAG, "SDP set failed") }
     }
 
-    companion object { private const val TAG = "PrivatChatRTC"; private const val MAX_BUFFERED = 512L * 1024L; private const val CALL_TIMEOUT_MS = 30_000L; private const val CALL_CHANNEL = "privatchat_calls"; private const val CALL_NOTIFICATION = 77 }
+    companion object {
+        private const val TAG = "PrivatChatRTC"
+        private const val MAX_BUFFERED = 512L * 1024L
+        private const val CALL_TIMEOUT_MS = 30_000L
+        private const val ICE_RESTART_DELAY_MS = 1_500L
+        private const val NETWORK_RESTART_DEBOUNCE_MS = 2_000L
+        private const val CALL_CHANNEL = "privatchat_calls"
+        private const val CALL_NOTIFICATION = 77
+    }
 }

@@ -32,6 +32,14 @@ class AttachmentTransferManager(
     private val outgoing = ConcurrentHashMap<String, Outgoing>()
     private val incoming = ConcurrentHashMap<String, Incoming>()
 
+    init {
+        scope.launch(Dispatchers.IO) {
+            store.transfers().filter { it.direction == "OUT" }.forEach { pending ->
+                store.message(pending.messageId)?.let { restore(it, pending.transferId) }
+            }
+        }
+    }
+
     fun enqueue(contactId: String, uri: Uri, image: Boolean): ChatMessage {
         val resolver = appContext.contentResolver
         var name = "attachment"; var size = -1L
@@ -55,6 +63,36 @@ class AttachmentTransferManager(
 
     fun onPeerReady(contactId: String) {
         outgoing.filterValues { it.message.contactId == contactId }.forEach { (id, value) -> offer(id, value) }
+    }
+
+    fun retry(message: ChatMessage) {
+        scope.launch(Dispatchers.IO) {
+            store.deleteTransferForMessage(message.id)
+            restore(message.copy(state = MessageState.PENDING, error = null), UUID.randomUUID().toString())
+        }
+    }
+
+    fun cancel(messageId: String) {
+        outgoing.entries.firstOrNull { it.value.message.id == messageId }?.let { outgoing.remove(it.key) }
+        store.deleteTransferForMessage(messageId)
+        store.updateState(messageId, MessageState.FAILED, "Canceled")
+        changed()
+    }
+
+    private fun restore(message: ChatMessage, transferId: String) {
+        val uri = message.attachmentUri?.let(Uri::parse) ?: return
+        val bytes = runCatching { appContext.contentResolver.openInputStream(uri)?.use { it.readBytesLimited(AttachmentSafety.MAX_BYTES) } }.getOrNull() ?: run {
+            store.updateState(message.id, MessageState.FAILED, "The selected file is no longer available")
+            changed(); return
+        }
+        val safe = AttachmentSafety.safeName(message.attachmentName ?: message.body)
+        val mime = message.attachmentMime ?: appContext.contentResolver.getType(uri) ?: "application/octet-stream"
+        val hash = AttachmentSafety.sha256(bytes)
+        val restored = message.copy(state = MessageState.PENDING, attachmentSize = bytes.size.toLong(), error = null)
+        store.updateState(message.id, MessageState.PENDING)
+        store.saveTransfer(PendingTransferEntity(transferId, message.id, message.contactId, uri.toString(), null, safe, mime, bytes.size.toLong(), hash, "OUT", "PENDING"))
+        outgoing[transferId] = Outgoing(restored, bytes, hash, mime, safe)
+        offer(transferId, outgoing.getValue(transferId)); ensurePeer(message.contactId); changed()
     }
 
     fun handle(contactId: String, root: JsonObject) {
@@ -95,11 +133,14 @@ class AttachmentTransferManager(
             store.updateState(value.message.id, MessageState.SENDING); changed()
             val chunks = AttachmentSafety.chunks(value.bytes)
             chunks.forEachIndexed { index, bytes ->
+                if (!outgoing.containsKey(id)) return@launch
                 val payload = buildJsonObject { put("v", 1); put("type", "FILE_CHUNK"); put("transfer_id", id); put("index", index); put("data", Base64.getEncoder().encodeToString(bytes)) }.toString()
-                while (!sendPeer(contactId, payload)) delay(25)
+                while (outgoing.containsKey(id) && !sendPeer(contactId, payload)) delay(25)
+                if (!outgoing.containsKey(id)) return@launch
                 store.updateProgress(value.message.id, ((index + 1) * 100 / chunks.size.coerceAtLeast(1)), MessageState.SENDING); changed()
             }
-            while (!send(contactId, "FILE_COMPLETE") { put("transfer_id", id); put("sha256", value.hash) }) delay(25)
+            while (outgoing.containsKey(id) && !send(contactId, "FILE_COMPLETE") { put("transfer_id", id); put("sha256", value.hash) }) delay(25)
+            if (!outgoing.containsKey(id)) return@launch
             store.updateProgress(value.message.id, 100, MessageState.SENT); store.deleteTransfer(id); outgoing.remove(id); changed()
         }
     }

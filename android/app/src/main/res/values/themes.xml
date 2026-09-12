@@ -1,7 +1,10 @@
 <resources>
-    <style name="Theme.OwnerLink" parent="android:Theme.Material.NoActionBar">
-        <item name="android:statusBarColor">#101218</item>
-        <item name="android:navigationBarColor">#101218</item>
-        <item name="android:windowBackground">#101218</item>
+    <style name="Theme.OwnerLink" parent="android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:fontFamily">sans</item>
+        <item name="android:colorAccent">#315EEB</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowBackground">@color/privatchat_splash_background</item>
     </style>
 </resources>

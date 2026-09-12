@@ -13,7 +13,7 @@ import com.ownerlink.agent.network.str
 object GestureDispatcher {
     fun dispatch(payload: JsonObject): Pair<Boolean, String?> {
         val service = OwnerLinkAccessibilityService.instance
-            ?: return false to "Enable the OwnerLink accessibility service on the phone."
+            ?: return false to "Enable the PrivatChat accessibility service on the phone."
         val gesture = (payload.str("gesture") ?: "").uppercase()
         val (w, h) = displaySize(service)
         return when (gesture) {

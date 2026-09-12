@@ -21,8 +21,8 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
@@ -44,7 +44,8 @@ android {
             manifestPlaceholders["usesCleartext"] = "true"
         }
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
             buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             if (externalSigningFile.isFile) signingConfig = signingConfigs.getByName("privatChatRelease")
@@ -90,6 +91,7 @@ dependencies {
     implementation("androidx.compose.ui:ui")
     implementation("androidx.compose.ui:ui-tooling-preview")
     implementation("androidx.compose.material3:material3")
+    implementation("androidx.compose.material:material-icons-extended")
     debugImplementation("androidx.compose.ui:ui-tooling")
     implementation("androidx.activity:activity-compose:1.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.4")

@@ -25,7 +25,10 @@ class ConnectionService : Service() {
         super.onCreate()
         createChannel()
         val app = application as OwnerLinkApp
-        networkMonitor = NetworkMonitor(this) { app.socket.retryNow() }.also { it.start() }
+        networkMonitor = NetworkMonitor(this) {
+            app.socket.retryNow()
+            app.rtc.onNetworkAvailable()
+        }.also { it.start() }
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -57,7 +60,7 @@ class ConnectionService : Service() {
     private fun createChannel() {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL, "PrivatChat connection", NotificationManager.IMPORTANCE_DEFAULT),
+            NotificationChannel(CHANNEL, "PrivatChat connection", NotificationManager.IMPORTANCE_LOW),
         )
     }
 
@@ -68,19 +71,12 @@ class ConnectionService : Service() {
             Intent(this, MainActivity::class.java),
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
         )
-        val stop = PendingIntent.getService(
-            this,
-            1,
-            Intent(this, ConnectionService::class.java).setAction(ACTION_STOP),
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE,
-        )
         return NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(R.drawable.ic_launcher)
+            .setSmallIcon(R.drawable.ic_privatchat_notification)
             .setContentTitle(getString(R.string.notification_title))
             .setContentText(getString(R.string.notification_text))
             .setContentIntent(open)
             .setOngoing(true)
-            .addAction(0, getString(R.string.notification_disconnect), stop)
             .build()
     }
 

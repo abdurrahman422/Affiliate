@@ -9,9 +9,12 @@ import com.ownerlink.agent.chat.ChatStore
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.service.KeepAliveWorker
 import com.ownerlink.agent.rtc.PeerRtcManager
+import com.ownerlink.agent.ui.theme.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 
 class OwnerLinkApp : Application() {
     lateinit var store: SecureStore
@@ -25,11 +28,14 @@ class OwnerLinkApp : Application() {
     lateinit var rtc: PeerRtcManager
         private set
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    private val _appearance = MutableStateFlow(ThemeMode.SYSTEM)
+    val appearance: StateFlow<ThemeMode> = _appearance
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         store = SecureStore(this)
+        _appearance.value = runCatching { ThemeMode.valueOf(store.appearance) }.getOrDefault(ThemeMode.SYSTEM)
         identity = ChatIdentityProvider.loadOrCreate(store)
         var controllerRef: ChatController? = null
         var peerRef: PeerRtcManager? = null
@@ -53,6 +59,11 @@ class OwnerLinkApp : Application() {
         chat = controller
         rtc = peer
         KeepAliveWorker.schedule(this)
+    }
+
+    fun setAppearance(mode: ThemeMode) {
+        store.appearance = mode.name
+        _appearance.value = mode
     }
 
     companion object {

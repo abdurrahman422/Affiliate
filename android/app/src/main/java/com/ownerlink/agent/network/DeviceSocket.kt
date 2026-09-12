@@ -166,15 +166,19 @@ class DeviceSocket(
                 val challenge = payload.str("challenge") ?: return
                 webSocketIdentity(challenge)
             }
-            Protocol.CHAT_IDENTITY_ACK -> peerHandler(type, payload)
+            Protocol.CHAT_IDENTITY_ACK -> {
+                peerHandler(type, payload)
+                socket?.send(Protocol.envelope(Protocol.RTC_CONFIG_REQUEST, store.deviceId))
+            }
             Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
             Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
-            Protocol.AUTH_OK -> { store.paired = true; _state.value = ConnectionState.Online; _message.value = "Connected" }
+            Protocol.AUTH_OK -> { store.paired = true; store.lastDashboardConnection = System.currentTimeMillis(); _state.value = ConnectionState.Online; _message.value = "Connected" }
             Protocol.PEER_MESSAGE, Protocol.PEER_DELIVER, Protocol.PEER_DELIVERED, Protocol.PEER_READ,
             Protocol.PEER_PRESENCE, Protocol.PRESENCE_UPDATE, Protocol.PEER_CONNECT_REQUEST,
             Protocol.PEER_CONNECT_ACCEPT, Protocol.PEER_CONNECT_REJECT, Protocol.PEER_SIGNAL,
             Protocol.CALL_INVITE, Protocol.CALL_RINGING, Protocol.CALL_ACCEPT, Protocol.CALL_OFFER,
-            Protocol.CALL_ANSWER, Protocol.CALL_ICE, Protocol.CALL_DECLINE, Protocol.CALL_END -> peerHandler(type, payload)
+            Protocol.CALL_ANSWER, Protocol.CALL_ICE, Protocol.CALL_DECLINE, Protocol.CALL_END,
+            Protocol.RTC_CONFIG -> peerHandler(type, payload)
             Protocol.REVOKED -> {
                 store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
                 stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)

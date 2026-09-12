@@ -19,7 +19,7 @@ object ScreenshotCapture {
 
     suspend fun capture(maxWidth: Int = 720, quality: Int = 55): CaptureResult {
         val service = OwnerLinkAccessibilityService.instance
-            ?: return CaptureResult.Failed("ACCESSIBILITY_DISABLED", "Enable the OwnerLink accessibility service on the phone.")
+            ?: return CaptureResult.Failed("ACCESSIBILITY_DISABLED", "Enable the PrivatChat accessibility service on the phone.")
         return suspendCancellableCoroutine { cont ->
             service.takeScreenshot(
                 Display.DEFAULT_DISPLAY,
