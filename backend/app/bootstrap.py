@@ -30,6 +30,16 @@ def validate_runtime_settings(settings: Settings) -> None:
     if settings.uses_redis and (not settings.UPSTASH_REDIS_REST_URL or not settings.UPSTASH_REDIS_REST_TOKEN):
         log.error("Redis storage requires UPSTASH_REDIS_REST_URL and UPSTASH_REDIS_REST_TOKEN")
         sys.exit(1)
+    turn_urls = [value.strip() for value in settings.TURN_URLS.split(",") if value.strip()]
+    if turn_urls and not settings.TURN_SHARED_SECRET:
+        log.error("TURN_URLS requires TURN_SHARED_SECRET")
+        sys.exit(1)
+    if any(not value.lower().startswith(("turn:", "turns:")) for value in turn_urls):
+        log.error("TURN_URLS entries must use turn: or turns:")
+        sys.exit(1)
+    if not 60 <= settings.TURN_CREDENTIAL_TTL <= 86400:
+        log.error("TURN_CREDENTIAL_TTL must be between 60 and 86400 seconds")
+        sys.exit(1)
 
 
 def bootstrap_owner(db: Session, settings: Settings) -> None:

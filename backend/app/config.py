@@ -40,6 +40,14 @@ class Settings(BaseSettings):
     TRANSFER_QUEUE_SIZE: int = 32
     MAX_CHUNK_BYTES: int = 64 * 1024
 
+    # WebRTC control-plane configuration. TURN_SHARED_SECRET is the Coturn
+    # REST-auth shared secret and must only exist in the server environment.
+    STUN_URLS: str = "stun:stun.l.google.com:19302"
+    TURN_URLS: str = ""
+    TURN_SHARED_SECRET: str = ""
+    TURN_REALM: str = "privatchat"
+    TURN_CREDENTIAL_TTL: int = 60 * 60
+
     @property
     def is_production(self) -> bool:
         return self.ENV.strip().lower() == "production"

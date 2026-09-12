@@ -97,6 +97,25 @@ def test_exact_contact_lookup_and_presence(client):
         presence = ws.receive_json(); assert presence["type"] == "PRESENCE_UPDATE" and presence["payload"]["online"] is True
 
 
+def test_authenticated_device_receives_safe_ice_configuration(client):
+    device = new_device_id()
+    with client.websocket_connect("/ws/device") as ws:
+        connect_identity(ws, device, "Alice")
+        ws.send_json({"v": 1, "type": "RTC_CONFIG_REQUEST", "device_id": device, "payload": {}})
+        result = ws.receive_json()
+        assert result["type"] == "RTC_CONFIG"
+        assert result["payload"]["ice_servers"][0]["urls"][0].startswith("stun:")
+        assert "credential" not in result["payload"]["ice_servers"][0]
+
+
+def test_unproven_device_cannot_obtain_turn_configuration(client):
+    device = new_device_id()
+    with client.websocket_connect("/ws/device") as ws:
+        unpaired_hello(ws, device, pairing_token(), "Unverified")
+        ws.send_json({"v": 1, "type": "RTC_CONFIG_REQUEST", "device_id": device, "payload": {}})
+        assert ws.receive_json()["payload"]["code"] == "CHAT_IDENTITY_REQUIRED"
+
+
 def test_oversized_and_incompatible_frames_are_rejected(client):
     device = new_device_id()
     with client.websocket_connect("/ws/device") as ws:

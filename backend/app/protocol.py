@@ -42,6 +42,8 @@ CALL_ICE = "CALL_ICE"
 CALL_DECLINE = "CALL_DECLINE"
 CALL_END = "CALL_END"
 DASHBOARD_DISCONNECT = "DASHBOARD_DISCONNECT"
+RTC_CONFIG_REQUEST = "RTC_CONFIG_REQUEST"
+RTC_CONFIG = "RTC_CONFIG"
 
 
 def envelope(msg_type: str, device_id: str, payload: dict | None = None, request_id: str | None = None) -> dict:

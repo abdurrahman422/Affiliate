@@ -58,3 +58,8 @@ def test_sqlite_has_no_plaintext_password(app, tmp_path):
         rows = conn.execute(text("SELECT password_hash FROM owner")).fetchall()
     assert rows
     assert "correct-horse-battery" not in rows[0][0]
+def test_liveness_and_readiness(client):
+    assert client.get("/health").json()["ok"] is True
+    ready = client.get("/ready")
+    assert ready.status_code == 200
+    assert ready.json() == {"ok": True, "ready": True, "storage": "sqlite"}

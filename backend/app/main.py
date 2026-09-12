@@ -7,6 +7,7 @@ import json
 import logging
 import secrets
 import uuid
+from datetime import datetime, timezone
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
@@ -41,6 +42,7 @@ from .hashing import hash_password, verify_password
 from .models import Owner
 from .registry import CommandError, DeviceOffline, Registry
 from .storage import RedisStore
+from .turn import create_ice_configuration
 from .util import content_disposition, is_uuid, pairing_token_entropy_ok
 
 log = logging.getLogger("ownerlink")
@@ -50,11 +52,28 @@ TEMPLATE_DIR = BASE_DIR / "templates"
 STATIC_DIR = BASE_DIR / "static"
 
 
-def setup_logging() -> None:
+class SafeJsonFormatter(logging.Formatter):
+    def format(self, record: logging.LogRecord) -> str:
+        value = {
+            "time": datetime.now(timezone.utc).isoformat(),
+            "level": record.levelname,
+            "logger": record.name,
+            "event": record.getMessage(),
+        }
+        if record.exc_info:
+            value["exception"] = record.exc_info[0].__name__ if record.exc_info[0] else "Exception"
+        return json.dumps(value, separators=(",", ":"), ensure_ascii=True)
+
+
+def setup_logging(production: bool = False) -> None:
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
+    if production:
+        formatter = SafeJsonFormatter()
+        for handler in logging.getLogger().handlers:
+            handler.setFormatter(formatter)
     logging.getLogger("uvicorn.access").setLevel(logging.INFO)
 
 
@@ -74,8 +93,8 @@ def parse_csrf_from_form(form_value: str | None, request: Request) -> None:
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    setup_logging()
     settings = settings or get_settings()
+    setup_logging(settings.is_production)
     validate_runtime_settings(settings)
     # Render production uses durable Upstash metadata. Local/test installations keep SQLite.
     if settings.uses_redis:
@@ -98,7 +117,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        yield
+        log.info("PrivatChat backend ready storage=%s worker_mode=single", "redis" if settings.uses_redis else "sqlite")
+        try:
+            yield
+        finally:
+            log.info("PrivatChat backend shutting down active_devices=%d", len(registry.links))
+            for link in list(registry.links.values()):
+                try:
+                    await link.websocket.close(code=1012, reason="service restart")
+                except Exception:
+                    pass
 
     app = FastAPI(title="PrivatChat", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings = settings
@@ -106,6 +134,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.engine = engine
     app.state.storage_backend = "redis" if settings.uses_redis else "sqlite"
     app.state.SessionLocal = SessionLocal
+    app.state.ready = True
 
     app.add_middleware(
         SessionMiddleware,
@@ -186,6 +215,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     @app.get("/health")
     async def health():
         return {"ok": True, "service": "ownerlink"}
+
+    @app.get("/ready")
+    async def ready():
+        # Startup already validates configuration and Redis connectivity. A
+        # live app therefore represents a ready single worker.
+        return {"ok": True, "ready": bool(app.state.ready), "storage": app.state.storage_backend}
 
     # ----- pages -----
     @app.get("/login", response_class=HTMLResponse)
@@ -921,6 +956,19 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         challenge = secrets.token_urlsafe(32)
         state["chat_challenge"] = challenge
         await websocket.send_json(P.envelope(P.CHAT_CHALLENGE, link.device_id, {"challenge": challenge}))
+        return
+
+    if msg_type == P.RTC_CONFIG_REQUEST:
+        if not link.allow_route(limit=30):
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {"code": "RATE_LIMITED", "message": "Too many configuration requests"}, data.get("request_id")))
+            return
+        if not link.contact_id:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "CHAT_IDENTITY_REQUIRED", "message": "Register chat identity before requesting call configuration"
+            }, data.get("request_id")))
+            return
+        subject = link.contact_id
+        await websocket.send_json(P.envelope(P.RTC_CONFIG, link.device_id, create_ice_configuration(registry.settings, subject)))
         return
 
     if msg_type == P.PRESENCE_QUERY:
