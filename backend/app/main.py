@@ -810,7 +810,9 @@ async def _safe_json(request: Request) -> dict | None:
 async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, SessionLocal, registry: Registry) -> None:
     msg_type = data.get("type")
     device_id = str(data.get("device_id") or "")
-    payload = data.get("payload") or {}
+    payload = data.get("payload", {})
+    if payload is None:
+        payload = {}
     if not isinstance(payload, dict):
         await websocket.send_json(P.envelope(P.ERROR, device_id, {"code": "BAD_PAYLOAD", "message": "Payload must be an object"}))
         return
