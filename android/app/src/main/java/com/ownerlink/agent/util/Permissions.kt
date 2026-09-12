@@ -81,6 +81,11 @@ object Permissions {
         }
     }
 
+    fun openBatterySettings(context: Context) {
+        val intent = Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))
+        try { context.startActivity(intent) } catch (_: Exception) { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+    }
+
     fun shouldOpenSettingsAfterDenial(activity: Activity?, permission: String): Boolean {
         if (activity == null) return false
         return !activity.shouldShowRequestPermissionRationale(permission)

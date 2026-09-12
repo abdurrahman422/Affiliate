@@ -85,6 +85,10 @@ class SecureStore(private val context: Context) {
         get() = prefs().getBoolean(KEY_ONBOARDING, false)
         set(value) { prefs().edit().putBoolean(KEY_ONBOARDING, value).apply() }
 
+    var profileUri: String?
+        get() = prefs().getString(KEY_PROFILE_URI, null)
+        set(value) { prefs().edit().putString(KEY_PROFILE_URI, value).apply() }
+
     var chatPrivateKey: String?
         get() = prefs().getString(KEY_CHAT_PRIVATE, null)
         set(value) { prefs().edit().putString(KEY_CHAT_PRIVATE, value).apply() }
@@ -130,6 +134,7 @@ class SecureStore(private val context: Context) {
         private const val KEY_PERMS = "permissions_seen"
         private const val KEY_SAF = "saf_trees"
         private const val KEY_ONBOARDING = "privatchat_onboarding"
+        private const val KEY_PROFILE_URI = "privatchat_profile_uri"
         private const val KEY_CHAT_PRIVATE = "privatchat_identity_private"
         private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
         const val PRODUCTION_SERVER = "https://ownerlink-curr.onrender.com"

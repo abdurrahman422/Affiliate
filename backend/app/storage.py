@@ -123,3 +123,11 @@ class RedisStore:
         if battery is not None: device.battery = battery
         if charging is not None: device.charging = charging
         self.save_device(device)
+
+    def save_contact(self, contact_id: str, public_key: str, name: str) -> None:
+        self._set(self._key(f"chat:contact:{contact_id}"), {
+            "contact_id": contact_id, "public_key": public_key, "name": name[:80],
+        })
+
+    def get_contact(self, contact_id: str) -> dict | None:
+        return self._get(self._key(f"chat:contact:{contact_id}"))

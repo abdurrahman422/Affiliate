@@ -118,3 +118,20 @@ def test_removed_device_can_pair_with_new_token(client):
         fresh = _pair(client, csrf, device_id, new_token, "Home Phone")
         assert fresh.status_code == 200
         assert ws.receive_json()["type"] == "PAIR_SUCCESS"
+
+
+def test_device_can_disconnect_its_own_dashboard_session(client):
+    csrf = login(client)
+    device_id = new_device_id(); token = pairing_token()
+    with client.websocket_connect("/ws/device") as ws:
+        unpaired_hello(ws, device_id, token, "Home Phone")
+        assert _pair(client, csrf, device_id, token, "Home Phone").status_code == 200
+        session = ws.receive_json()["payload"]["session_token"]
+    with client.websocket_connect("/ws/device") as ws:
+        ws.send_json({"v": 1, "type": "DEVICE_AUTH", "device_id": device_id, "payload": {"session_token": session}})
+        assert ws.receive_json()["type"] == "AUTH_OK"
+        ws.send_json({"v": 1, "type": "DASHBOARD_DISCONNECT", "device_id": device_id, "payload": {}})
+        assert ws.receive_json()["type"] == "REVOKED"
+    with client.websocket_connect("/ws/device") as ws:
+        ws.send_json({"v": 1, "type": "DEVICE_AUTH", "device_id": device_id, "payload": {"session_token": session}})
+        assert ws.receive_json()["payload"]["code"] in {"NOT_PAIRED", "AUTH_FAILED"}

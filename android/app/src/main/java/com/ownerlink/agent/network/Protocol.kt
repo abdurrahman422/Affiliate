@@ -38,16 +38,28 @@ object Protocol {
     const val SCREEN_STATUS = "SCREEN_STATUS"
     const val CHAT_IDENTITY_HELLO = "CHAT_IDENTITY_HELLO"
     const val CHAT_IDENTITY_ACK = "CHAT_IDENTITY_ACK"
+    const val CHAT_CHALLENGE_REQUEST = "CHAT_CHALLENGE_REQUEST"
+    const val CHAT_CHALLENGE = "CHAT_CHALLENGE"
     const val PEER_MESSAGE = "PEER_MESSAGE"
     const val PEER_DELIVER = "PEER_DELIVER"
     const val PEER_DELIVERED = "PEER_DELIVERED"
     const val PEER_READ = "PEER_READ"
     const val PEER_PRESENCE = "PEER_PRESENCE"
+    const val PRESENCE_QUERY = "PRESENCE_QUERY"
+    const val PRESENCE_UPDATE = "PRESENCE_UPDATE"
+    const val PEER_CONNECT_REQUEST = "PEER_CONNECT_REQUEST"
+    const val PEER_CONNECT_ACCEPT = "PEER_CONNECT_ACCEPT"
+    const val PEER_CONNECT_REJECT = "PEER_CONNECT_REJECT"
+    const val PEER_SIGNAL = "PEER_SIGNAL"
+    const val CALL_INVITE = "CALL_INVITE"
+    const val CALL_RINGING = "CALL_RINGING"
+    const val CALL_ACCEPT = "CALL_ACCEPT"
     const val CALL_OFFER = "CALL_OFFER"
     const val CALL_ANSWER = "CALL_ANSWER"
     const val CALL_ICE = "CALL_ICE"
     const val CALL_DECLINE = "CALL_DECLINE"
     const val CALL_END = "CALL_END"
+    const val DASHBOARD_DISCONNECT = "DASHBOARD_DISCONNECT"
 
     val json = Json {
         ignoreUnknownKeys = true
@@ -57,6 +69,7 @@ object Protocol {
 
     fun envelope(type: String, deviceId: String, payload: JsonObject = buildJsonObject {}, requestId: String? = null): String {
         val obj = buildJsonObject {
+            put("v", 1)
             put("type", type)
             if (requestId == null) put("request_id", JsonNull) else put("request_id", requestId)
             put("device_id", deviceId)

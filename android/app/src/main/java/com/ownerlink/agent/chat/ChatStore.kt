@@ -1,45 +1,122 @@
 package com.ownerlink.agent.chat
 
-import android.content.ContentValues
 import android.content.Context
-import android.database.sqlite.SQLiteDatabase
-import android.database.sqlite.SQLiteOpenHelper
+import androidx.room.Dao
+import androidx.room.Database
+import androidx.room.Entity
+import androidx.room.Index
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.PrimaryKey
+import androidx.room.Query
+import androidx.room.Room
+import androidx.room.RoomDatabase
 
-enum class MessageState { PENDING, SENT, DELIVERED, READ }
-data class ChatMessage(val id: String, val contactId: String, val body: String, val outgoing: Boolean, val createdAt: Long, val state: MessageState)
+enum class MessageState { PENDING, SENDING, SENT, DELIVERED, READ, FAILED }
 
-class ChatStore(context: Context) : SQLiteOpenHelper(context, "privatchat.db", null, 1) {
-    override fun onCreate(db: SQLiteDatabase) {
-        db.execSQL("CREATE TABLE contacts(contact_id TEXT PRIMARY KEY, public_key TEXT NOT NULL, name TEXT NOT NULL)")
-        db.execSQL("CREATE TABLE messages(id TEXT PRIMARY KEY, contact_id TEXT NOT NULL, body TEXT NOT NULL, outgoing INTEGER NOT NULL, created_at INTEGER NOT NULL, state TEXT NOT NULL)")
-        db.execSQL("CREATE INDEX messages_contact_time ON messages(contact_id, created_at)")
-    }
-    override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) = Unit
+data class ChatMessage(
+    val id: String,
+    val contactId: String,
+    val body: String,
+    val outgoing: Boolean,
+    val createdAt: Long,
+    val state: MessageState,
+    val kind: String = "text",
+    val attachmentUri: String? = null,
+    val attachmentName: String? = null,
+    val attachmentMime: String? = null,
+    val attachmentSize: Long? = null,
+    val progress: Int = 0,
+    val error: String? = null,
+)
 
-    fun saveContact(card: ContactCard) = writableDatabase.insertWithOnConflict("contacts", null, ContentValues().apply {
-        put("contact_id", card.contactId); put("public_key", card.publicKey); put("name", card.name)
-    }, SQLiteDatabase.CONFLICT_REPLACE)
+@Entity(tableName = "contacts")
+data class ContactEntity(
+    @PrimaryKey val contactId: String,
+    val publicKey: String,
+    val name: String,
+    val avatarUri: String? = null,
+    val addedAt: Long = System.currentTimeMillis(),
+)
 
-    fun contacts(): List<ContactCard> = readableDatabase.rawQuery("SELECT contact_id,public_key,name FROM contacts ORDER BY name COLLATE NOCASE", null).use { c ->
-        buildList { while (c.moveToNext()) add(ContactCard(c.getString(0), c.getString(1), c.getString(2))) }
-    }
+@Entity(tableName = "messages", indices = [Index(value = ["contactId", "createdAt"]), Index(value = ["state"])])
+data class MessageEntity(
+    @PrimaryKey val id: String,
+    val contactId: String,
+    val body: String,
+    val outgoing: Boolean,
+    val createdAt: Long,
+    val state: String,
+    val kind: String,
+    val attachmentUri: String?,
+    val attachmentName: String?,
+    val attachmentMime: String?,
+    val attachmentSize: Long?,
+    val progress: Int,
+    val error: String?,
+)
 
-    fun contact(contactId: String): ContactCard? = readableDatabase.rawQuery("SELECT contact_id,public_key,name FROM contacts WHERE contact_id=?", arrayOf(contactId)).use { c ->
-        if (c.moveToFirst()) ContactCard(c.getString(0), c.getString(1), c.getString(2)) else null
-    }
+@Entity(tableName = "pending_transfers", indices = [Index("contactId")])
+data class PendingTransferEntity(
+    @PrimaryKey val transferId: String,
+    val messageId: String,
+    val contactId: String,
+    val sourceUri: String?,
+    val destinationPath: String?,
+    val safeName: String,
+    val mime: String,
+    val size: Long,
+    val sha256: String,
+    val direction: String,
+    val state: String,
+    val bytesComplete: Long = 0,
+)
 
-    fun putMessage(message: ChatMessage): Boolean = writableDatabase.insertWithOnConflict("messages", null, ContentValues().apply {
-        put("id", message.id); put("contact_id", message.contactId); put("body", message.body); put("outgoing", if (message.outgoing) 1 else 0)
-        put("created_at", message.createdAt); put("state", message.state.name)
-    }, SQLiteDatabase.CONFLICT_IGNORE) != -1L
-
-    fun updateState(id: String, state: MessageState) = writableDatabase.update("messages", ContentValues().apply { put("state", state.name) }, "id=?", arrayOf(id))
-
-    fun messages(contactId: String): List<ChatMessage> = readableDatabase.rawQuery(
-        "SELECT id,contact_id,body,outgoing,created_at,state FROM messages WHERE contact_id=? ORDER BY created_at", arrayOf(contactId)
-    ).use { c -> buildList { while (c.moveToNext()) add(ChatMessage(c.getString(0), c.getString(1), c.getString(2), c.getInt(3) == 1, c.getLong(4), MessageState.valueOf(c.getString(5)))) } }
-
-    fun pending(): List<ChatMessage> = readableDatabase.rawQuery(
-        "SELECT id,contact_id,body,outgoing,created_at,state FROM messages WHERE outgoing=1 AND state='PENDING' ORDER BY created_at", null
-    ).use { c -> buildList { while(c.moveToNext()) add(ChatMessage(c.getString(0), c.getString(1), c.getString(2), true, c.getLong(4), MessageState.PENDING)) } }
+@Dao
+interface ChatDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun saveContact(value: ContactEntity)
+    @Query("SELECT * FROM contacts ORDER BY name COLLATE NOCASE") fun contacts(): List<ContactEntity>
+    @Query("SELECT * FROM contacts WHERE contactId=:id LIMIT 1") fun contact(id: String): ContactEntity?
+    @Query("DELETE FROM contacts WHERE contactId=:id") fun removeContact(id: String)
+    @Insert(onConflict = OnConflictStrategy.IGNORE) fun insertMessage(value: MessageEntity): Long
+    @Query("UPDATE messages SET state=:state,error=:error WHERE id=:id") fun updateState(id: String, state: String, error: String? = null)
+    @Query("SELECT state FROM messages WHERE id=:id LIMIT 1") fun messageState(id: String): String?
+    @Query("UPDATE messages SET progress=:progress,state=:state WHERE id=:id") fun updateProgress(id: String, progress: Int, state: String)
+    @Query("SELECT * FROM messages WHERE contactId=:id ORDER BY createdAt,id") fun messages(id: String): List<MessageEntity>
+    @Query("SELECT * FROM messages WHERE outgoing=1 AND state IN ('PENDING','FAILED') ORDER BY createdAt") fun pending(): List<MessageEntity>
+    @Query("SELECT id FROM messages WHERE contactId=:id AND outgoing=0 AND state='DELIVERED'") fun unreadIds(id: String): List<String>
+    @Query("UPDATE messages SET state='READ' WHERE contactId=:id AND outgoing=0 AND state='DELIVERED'") fun markRead(id: String)
+    @Insert(onConflict = OnConflictStrategy.REPLACE) fun saveTransfer(value: PendingTransferEntity)
+    @Query("SELECT * FROM pending_transfers WHERE transferId=:id LIMIT 1") fun transfer(id: String): PendingTransferEntity?
+    @Query("DELETE FROM pending_transfers WHERE transferId=:id") fun deleteTransfer(id: String)
 }
+
+@Database(entities = [ContactEntity::class, MessageEntity::class, PendingTransferEntity::class], version = 1, exportSchema = true)
+abstract class ChatDatabase : RoomDatabase() { abstract fun chatDao(): ChatDao }
+
+class ChatStore(context: Context) {
+    private val dao = Room.databaseBuilder(context, ChatDatabase::class.java, "privatchat-room.db")
+        .allowMainThreadQueries()
+        .build()
+        .chatDao()
+
+    fun saveContact(card: ContactCard) = dao.saveContact(ContactEntity(card.contactId, card.publicKey, card.name))
+    fun contacts(): List<ContactCard> = dao.contacts().map { ContactCard(it.contactId, it.publicKey, it.name) }
+    fun contact(contactId: String): ContactCard? = dao.contact(contactId)?.let { ContactCard(it.contactId, it.publicKey, it.name) }
+    fun removeContact(contactId: String) = dao.removeContact(contactId)
+    fun putMessage(message: ChatMessage): Boolean = dao.insertMessage(message.entity()) != -1L
+    fun updateState(id: String, state: MessageState, error: String? = null) {
+        val current = dao.messageState(id)?.let { runCatching { MessageState.valueOf(it) }.getOrNull() }
+        if (current == null || MessageStateRules.canTransition(current, state)) dao.updateState(id, state.name, error)
+    }
+    fun updateProgress(id: String, progress: Int, state: MessageState) = dao.updateProgress(id, progress.coerceIn(0, 100), state.name)
+    fun messages(contactId: String): List<ChatMessage> = dao.messages(contactId).map(MessageEntity::model)
+    fun pending(): List<ChatMessage> = dao.pending().map(MessageEntity::model)
+    fun markRead(contactId: String): List<String> = dao.unreadIds(contactId).also { dao.markRead(contactId) }
+    fun saveTransfer(value: PendingTransferEntity) = dao.saveTransfer(value)
+    fun transfer(id: String) = dao.transfer(id)
+    fun deleteTransfer(id: String) = dao.deleteTransfer(id)
+}
+
+private fun ChatMessage.entity() = MessageEntity(id, contactId, body, outgoing, createdAt, state.name, kind, attachmentUri, attachmentName, attachmentMime, attachmentSize, progress, error)
+private fun MessageEntity.model() = ChatMessage(id, contactId, body, outgoing, createdAt, MessageState.valueOf(state), kind, attachmentUri, attachmentName, attachmentMime, attachmentSize, progress, error)

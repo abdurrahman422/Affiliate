@@ -49,12 +49,22 @@ class DeviceLink:
     lock: asyncio.Lock = field(default_factory=asyncio.Lock)
     contact_id: str | None = None
     public_key: str | None = None
+    contact_name: str | None = None
+    route_times: list[float] = field(default_factory=list)
 
     def touch(self) -> None:
         self.last_seen = time.time()
 
     def is_stale(self, timeout: float) -> bool:
         return (time.time() - self.last_seen) > timeout
+
+    def allow_route(self, limit: int = 240, window: float = 60.0) -> bool:
+        now = time.time()
+        self.route_times = [item for item in self.route_times if now - item < window]
+        if len(self.route_times) >= limit:
+            return False
+        self.route_times.append(now)
+        return True
 
 
 class Registry:
@@ -96,7 +106,7 @@ class Registry:
                     self.contacts.pop(current.contact_id, None)
                 self._fail_pending(current, CommandError("DISCONNECTED", "Device disconnected"))
 
-    async def register_contact(self, link: DeviceLink, contact_id: str, public_key: str) -> None:
+    async def register_contact(self, link: DeviceLink, contact_id: str, public_key: str, name: str) -> None:
         async with self._guard:
             previous = self.contacts.get(contact_id)
             if previous is not None and previous is not link:
@@ -105,7 +115,14 @@ class Registry:
                 self.contacts.pop(link.contact_id, None)
             link.contact_id = contact_id
             link.public_key = public_key
+            link.contact_name = name[:80]
             self.contacts[contact_id] = link
+
+    def contact_public(self, contact_id: str) -> dict[str, str] | None:
+        link = self.contacts.get(contact_id)
+        if link is None or not link.public_key:
+            return None
+        return {"contact_id": contact_id, "public_key": link.public_key, "name": link.contact_name or "PrivatChat user"}
 
     async def route_peer(self, sender: DeviceLink, message: dict) -> bool:
         """Relay an opaque message/signaling envelope to one exact registered contact."""

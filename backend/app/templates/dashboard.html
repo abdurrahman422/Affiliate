@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Devices — OwnerLink{% endblock %}
+{% block title %}Devices — PrivatChat{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -10,7 +10,7 @@
 </div>
 <div id="device-grid" class="grid">
   {% if not devices %}
-  <p class="empty">No devices paired yet. Open the OwnerLink app on your phone and scan its QR code.</p>
+  <p class="empty">No devices paired yet. In PrivatChat, open Settings → Connect with Dashboard.</p>
   {% endif %}
   {% for d in devices %}
   <article class="card device-card" data-device-id="{{ d.device_id }}">

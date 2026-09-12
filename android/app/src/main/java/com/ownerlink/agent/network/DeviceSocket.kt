@@ -6,6 +6,7 @@ import android.os.Looper
 import android.util.Log
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.chat.ChatIdentity
+import com.ownerlink.agent.chat.signChallenge
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Urls
 import kotlinx.coroutines.CoroutineScope
@@ -45,6 +46,10 @@ class DeviceSocket(
 
     @Synchronized fun send(text: String): Boolean =
         lifecycle.status == SocketStatus.CONNECTED && socket?.send(text) == true
+
+    fun disconnectDashboard() {
+        send(Protocol.envelope(Protocol.DASHBOARD_DISCONNECT, store.deviceId))
+    }
 
     private val client = OkHttpClient.Builder().pingInterval(20, TimeUnit.SECONDS)
         .readTimeout(0, TimeUnit.MILLISECONDS).retryOnConnectionFailure(true).build()
@@ -118,11 +123,7 @@ class DeviceSocket(
                 }))
                 Log.i(TAG, "UNPAIRED_HELLO sent")
             }
-            webSocket.send(Protocol.envelope(Protocol.CHAT_IDENTITY_HELLO, store.deviceId, buildJsonObject {
-                put("contact_id", chatIdentity.contactId); put("public_key", chatIdentity.publicKey)
-                put("name", store.friendlyName.ifBlank { "PrivatChat user" })
-            }))
-            Log.i(TAG, "CHAT_IDENTITY_HELLO sent")
+            webSocket.send(Protocol.envelope(Protocol.CHAT_CHALLENGE_REQUEST, store.deviceId))
             handler.removeCallbacks(heartbeat)
             handler.post(heartbeat)
         }
@@ -161,14 +162,19 @@ class DeviceSocket(
         val requestId = root.str("request_id")
         val payload = root["payload"] as? JsonObject ?: buildJsonObject {}
         when (type) {
+            Protocol.CHAT_CHALLENGE -> {
+                val challenge = payload.str("challenge") ?: return
+                webSocketIdentity(challenge)
+            }
             Protocol.CHAT_IDENTITY_ACK -> peerHandler(type, payload)
             Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
             Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
             Protocol.AUTH_OK -> { store.paired = true; _state.value = ConnectionState.Online; _message.value = "Connected" }
-            Protocol.CHAT_IDENTITY_ACK -> scope.coroutineContext.let { /* registration acknowledged */ }
             Protocol.PEER_MESSAGE, Protocol.PEER_DELIVER, Protocol.PEER_DELIVERED, Protocol.PEER_READ,
-            Protocol.PEER_PRESENCE, Protocol.CALL_OFFER, Protocol.CALL_ANSWER, Protocol.CALL_ICE,
-            Protocol.CALL_DECLINE, Protocol.CALL_END -> peerHandler(type, payload)
+            Protocol.PEER_PRESENCE, Protocol.PRESENCE_UPDATE, Protocol.PEER_CONNECT_REQUEST,
+            Protocol.PEER_CONNECT_ACCEPT, Protocol.PEER_CONNECT_REJECT, Protocol.PEER_SIGNAL,
+            Protocol.CALL_INVITE, Protocol.CALL_RINGING, Protocol.CALL_ACCEPT, Protocol.CALL_OFFER,
+            Protocol.CALL_ANSWER, Protocol.CALL_ICE, Protocol.CALL_DECLINE, Protocol.CALL_END -> peerHandler(type, payload)
             Protocol.REVOKED -> {
                 store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
                 stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)
@@ -180,6 +186,15 @@ class DeviceSocket(
             Protocol.GET_SCREEN_FRAME, Protocol.START_SCREEN_STREAM, Protocol.STOP_SCREEN_STREAM,
             Protocol.REMOTE_GESTURE, Protocol.GET_STATUS -> commands.handle(type, requestId, payload)
         }
+    }
+
+    private fun webSocketIdentity(challenge: String) {
+        val hello = Protocol.envelope(Protocol.CHAT_IDENTITY_HELLO, store.deviceId, buildJsonObject {
+            put("contact_id", chatIdentity.contactId); put("public_key", chatIdentity.publicKey)
+            put("name", store.friendlyName.ifBlank { "PrivatChat user" }); put("challenge", challenge)
+            put("signature", chatIdentity.signChallenge(challenge, store.deviceId))
+        })
+        if (socket?.send(hello) == true) Log.i(TAG, "CHAT_IDENTITY_HELLO sent")
     }
     companion object { private const val TAG = "OwnerLinkSocket" }
 }

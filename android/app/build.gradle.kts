@@ -5,6 +5,7 @@ plugins {
     id("org.jetbrains.kotlin.android")
     id("org.jetbrains.kotlin.plugin.compose")
     id("org.jetbrains.kotlin.plugin.serialization")
+    id("org.jetbrains.kotlin.kapt")
 }
 
 val externalSigningFile = file(System.getProperty("user.home") + "/.privatchat/signing.properties")
@@ -24,6 +25,7 @@ android {
         versionName = "1.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
+        buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
     }
 
     signingConfigs {
@@ -38,13 +40,13 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
-            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "false")
+            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             manifestPlaceholders["usesCleartext"] = "true"
         }
         release {
             isMinifyEnabled = false
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
-            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "false")
+            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             if (externalSigningFile.isFile) signingConfig = signingConfigs.getByName("privatChatRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -64,11 +66,22 @@ android {
         compose = true
         buildConfig = true
     }
+
+    // Compose's bundled lint detector cannot read the Kotlin 2.1 metadata
+    // published by current Room. Disable only the crashing detector until the
+    // Android Gradle lint runtime is updated; the source still compiles/tests.
+    lint {
+        disable += "StateFlowValueCalledInComposition"
+    }
     packaging {
         resources {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+}
+
+kapt {
+    arguments { arg("room.schemaLocation", "$projectDir/schemas") }
 }
 
 dependencies {
@@ -90,5 +103,13 @@ dependencies {
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.1")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("com.google.android.gms:play-services-code-scanner:16.1.0")
+    implementation("androidx.room:room-runtime:2.8.5")
+    implementation("androidx.room:room-ktx:2.8.5")
+    kapt("androidx.room:room-compiler:2.8.5")
+    implementation("io.github.webrtc-sdk:android:150.7871.01")
     testImplementation("junit:junit:4.13.2")
+    androidTestImplementation("androidx.test.ext:junit:1.2.1")
+    androidTestImplementation("androidx.test:runner:1.6.2")
+    androidTestImplementation("androidx.room:room-testing:2.8.5")
 }

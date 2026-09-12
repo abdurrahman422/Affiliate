@@ -34,7 +34,7 @@
     let lastErr = null;
     for (let i = 0; i < 20; i++) {
       setResult(i === 0
-        ? "Pairing… keep OwnerLink open on the phone until it says Waiting for pairing."
+        ? "Pairing… keep PrivatChat open on the phone until the dashboard connection completes."
         : "Waiting for the phone to come online… (" + (i + 1) + "/20)");
       try {
         const data = await OwnerLink.api("/api/devices/pair", { method: "POST", body });

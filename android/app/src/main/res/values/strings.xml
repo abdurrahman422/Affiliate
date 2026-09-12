@@ -3,6 +3,6 @@
     <string name="notification_title">PrivatChat connected</string>
     <string name="notification_text">Messages and your optional dashboard connection stay available.</string>
     <string name="notification_disconnect">Disconnect</string>
-    <string name="accessibility_service_description">OwnerLink uses the accessibility screenshot and gesture APIs so you can view this phone at low FPS from your own website and send taps, swipes, Back, Home, and Recents. It does not bypass secure screens, hide itself, or type passwords. Enable this only on phones you own.</string>
+    <string name="accessibility_service_description">PrivatChat uses Android screenshot and gesture APIs only for the optional dashboard Remote Screen feature. It cannot bypass secure screens, hide itself, or type passwords. Enable this only on phones you own.</string>
     <string name="accessibility_service_label">PrivatChat dashboard remote screen</string>
 </resources>

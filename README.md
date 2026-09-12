@@ -1,4 +1,6 @@
-# OwnerLink V1
+# PrivatChat
+
+PrivatChat evolves the existing OwnerLink Android, backend, dashboard, and remote-access foundation. The six numbered PrivatChat specification files beside this repository are authoritative for current product behavior.
 
 Self-hosted remote access for Android phones you own. One website, multiple phones (for example Home Phone and Business Phone). Browse gallery and files, download originals through a live relay, and use a low-FPS remote screen with tap / swipe / Back / Home / Recents.
 
@@ -96,12 +98,12 @@ APK path:
 ### Phone setup (physical access, once)
 
 1. Install the APK.
-2. Enter the OwnerLink server URL (`https://your-domain` in production).
+2. The production server is built into the app; no server URL entry is required.
 3. Grant notifications, photos/videos, and All files access (or pick folders).
-4. Enable the OwnerLink accessibility service if you want remote screen/control.
-5. Optionally disable battery optimization for OwnerLink.
+4. Enable the PrivatChat accessibility service if you want remote screen/control.
+5. Optionally disable battery optimization for PrivatChat.
 6. Start remote access. A QR code appears.
-7. On a laptop, log in to OwnerLink → **Add Device** → scan or paste the QR JSON.
+7. On a laptop, log in to PrivatChat → **Add Device**. In the app, use **Settings → Connect with Dashboard** to scan or paste the separate dashboard code.
 
 After that, travel usage is: open the site → log in → pick the phone. Temporary internet loss does not unpair the device.
 
@@ -157,7 +159,7 @@ stored in Redis.
    `OWNERLINK_ADMIN_PASSWORD`; remove the plaintext password from Render after the
    owner has been created.
 5. Enter that exact HTTPS Render URL (without `/login` or `/ws/device`) in the Android
-   app's **OwnerLink Server URL** field.
+   app's built-in production server setting.
 
 Render Free may sleep. That disconnects live sockets but does not unpair a phone: the
 Android foreground connection service retries with exponential backoff and reuses its

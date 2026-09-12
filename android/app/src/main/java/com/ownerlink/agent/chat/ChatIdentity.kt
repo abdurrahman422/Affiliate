@@ -7,9 +7,17 @@ import java.security.MessageDigest
 import java.security.PrivateKey
 import java.security.spec.ECGenParameterSpec
 import java.security.spec.PKCS8EncodedKeySpec
+import java.security.Signature
 import java.util.Base64
 
 data class ChatIdentity(val contactId: String, val publicKey: String, val privateKey: PrivateKey)
+
+fun ChatIdentity.signChallenge(challenge: String, deviceId: String): String {
+    val signer = Signature.getInstance("SHA256withECDSA")
+    signer.initSign(privateKey)
+    signer.update("$challenge:$deviceId".toByteArray(Charsets.UTF_8))
+    return Base64.getUrlEncoder().withoutPadding().encodeToString(signer.sign())
+}
 
 object ChatIdentityProvider {
     fun loadOrCreate(store: SecureStore): ChatIdentity {

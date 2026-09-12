@@ -15,5 +15,7 @@ class AttachmentSafetyTest {
         val joined = AttachmentSafety.chunks(bytes).flatMap { it.asList() }.toByteArray()
         assertArrayEquals(bytes, joined)
         assertEquals(64, AttachmentSafety.sha256(bytes).length)
+        assertEquals(true, AttachmentSafety.verify(bytes, bytes.size.toLong(), AttachmentSafety.sha256(bytes)))
+        assertEquals(false, AttachmentSafety.verify(bytes, bytes.size.toLong(), "0".repeat(64)))
     }
 }

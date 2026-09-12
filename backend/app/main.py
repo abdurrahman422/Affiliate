@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import hashlib
 import json
 import logging
 import secrets
@@ -8,6 +10,10 @@ import uuid
 from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
+
+from cryptography.exceptions import InvalidSignature
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
 
 from fastapi import FastAPI, Form, HTTPException, Request, WebSocket, WebSocketDisconnect, status
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
@@ -84,6 +90,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         SessionLocal = session_factory(engine)
     registry = Registry(settings)
     limiter = LoginLimiter(settings.LOGIN_MAX_ATTEMPTS, settings.LOGIN_WINDOW_SECONDS)
+    contact_limiter = LoginLimiter(60, 60)
     templates = Jinja2Templates(directory=str(TEMPLATE_DIR))
 
     with SessionLocal() as db:
@@ -93,7 +100,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def lifespan(_app: FastAPI):
         yield
 
-    app = FastAPI(title="OwnerLink", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app = FastAPI(title="PrivatChat", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.registry = registry
     app.state.engine = engine
@@ -378,6 +385,25 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             except (DeviceOffline, CommandError):
                 pass
         return {"ok": True, "device": data}
+
+    @app.get("/api/contact/{contact_id}")
+    async def api_contact(request: Request, contact_id: str):
+        ip = client_ip(request)
+        if contact_limiter.too_many(ip):
+            return json_error("Too many contact lookups", "RATE_LIMITED", 429)
+        contact_limiter.record(ip)
+        if not (8 <= len(contact_id) <= 128):
+            return json_error("Contact not found", "NOT_FOUND", 404)
+        value = registry.contact_public(contact_id)
+        if value is None and settings.uses_redis:
+            db = db_session()
+            try:
+                value = db.get_contact(contact_id) if isinstance(db, RedisStore) else None
+            finally:
+                db.close()
+        if value is None:
+            return json_error("Contact not found", "NOT_FOUND", 404)
+        return {"ok": True, "contact": value}
 
     @app.post("/api/devices/pair")
     async def api_pair(request: Request):
@@ -674,6 +700,12 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     except json.JSONDecodeError:
                         await websocket.send_json(P.envelope(P.ERROR, "", {"code": "BAD_JSON", "message": "Invalid JSON"}))
                         continue
+                    if not isinstance(data, dict):
+                        await websocket.send_json(P.envelope(P.ERROR, "", {"code": "BAD_JSON", "message": "JSON envelope must be an object"}))
+                        continue
+                    if data.get("v", 1) != 1:
+                        await websocket.send_json(P.envelope(P.ERROR, "", {"code": "BAD_VERSION", "message": "Unsupported protocol version"}))
+                        continue
                     await _handle_device_text(websocket, data, state, SessionLocal, registry)
                 elif message.get("bytes") is not None:
                     link = state.get("link")
@@ -779,6 +811,9 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
     msg_type = data.get("type")
     device_id = str(data.get("device_id") or "")
     payload = data.get("payload") or {}
+    if not isinstance(payload, dict):
+        await websocket.send_json(P.envelope(P.ERROR, device_id, {"code": "BAD_PAYLOAD", "message": "Payload must be an object"}))
+        return
 
     if msg_type == P.UNPAIRED_HELLO:
         token = str(payload.get("pairing_token") or "")
@@ -828,12 +863,27 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
     if msg_type == P.CHAT_IDENTITY_HELLO:
         contact_id = str(payload.get("contact_id") or "").strip()
         public_key = str(payload.get("public_key") or "").strip()
+        challenge = str(payload.get("challenge") or "")
+        signature = str(payload.get("signature") or "")
         if not (8 <= len(contact_id) <= 128 and 32 <= len(public_key) <= 4096):
             await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
                 "code": "INVALID_CHAT_IDENTITY", "message": "Invalid chat identity"
             }, data.get("request_id")))
             return
-        await registry.register_contact(link, contact_id, public_key)
+        expected_challenge = state.pop("chat_challenge", None)
+        if not expected_challenge or not secrets.compare_digest(challenge, expected_challenge) or not _verify_chat_identity(contact_id, public_key, signature, challenge, link.device_id):
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "CHAT_IDENTITY_PROOF_FAILED", "message": "Chat identity proof failed"
+            }, data.get("request_id")))
+            return
+        name = str(payload.get("name") or "PrivatChat user").strip()[:80] or "PrivatChat user"
+        await registry.register_contact(link, contact_id, public_key, name)
+        db = SessionLocal()
+        try:
+            if isinstance(db, RedisStore):
+                db.save_contact(contact_id, public_key, name)
+        finally:
+            db.close()
         await websocket.send_json(P.envelope(P.CHAT_IDENTITY_ACK, link.device_id, {
             "contact_id": contact_id
         }, data.get("request_id")))
@@ -841,7 +891,9 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
 
     peer_types = {
         P.PEER_MESSAGE, P.PEER_DELIVERED, P.PEER_READ, P.PEER_PRESENCE,
-        P.CALL_OFFER, P.CALL_ANSWER, P.CALL_ICE, P.CALL_DECLINE, P.CALL_END,
+        P.PEER_CONNECT_REQUEST, P.PEER_CONNECT_ACCEPT, P.PEER_CONNECT_REJECT, P.PEER_SIGNAL,
+        P.CALL_INVITE, P.CALL_RINGING, P.CALL_ACCEPT, P.CALL_OFFER, P.CALL_ANSWER,
+        P.CALL_ICE, P.CALL_DECLINE, P.CALL_END,
     }
     if msg_type in peer_types:
         raw_size = len(json.dumps(data, separators=(",", ":")))
@@ -850,12 +902,46 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
                 "code": "MESSAGE_TOO_LARGE", "message": "Envelope exceeds 256 KiB"
             }, data.get("request_id")))
             return
+        if not link.allow_route():
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "RATE_LIMITED", "message": "Too many signaling messages"
+            }, data.get("request_id")))
+            return
         delivered = await registry.route_peer(link, data)
         if msg_type == P.PEER_MESSAGE:
             await websocket.send_json(P.envelope(P.PEER_DELIVER, link.device_id, {
                 "message_id": payload.get("message_id"),
                 "delivered": delivered,
             }, data.get("request_id")))
+        return
+
+    if msg_type == P.CHAT_CHALLENGE_REQUEST:
+        challenge = secrets.token_urlsafe(32)
+        state["chat_challenge"] = challenge
+        await websocket.send_json(P.envelope(P.CHAT_CHALLENGE, link.device_id, {"challenge": challenge}))
+        return
+
+    if msg_type == P.PRESENCE_QUERY:
+        target = str(payload.get("contact_id") or "")
+        await websocket.send_json(P.envelope(P.PRESENCE_UPDATE, link.device_id, {
+            "contact_id": target,
+            "online": target in registry.contacts,
+        }, data.get("request_id")))
+        return
+
+    if msg_type == P.DASHBOARD_DISCONNECT:
+        if not link.paired:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "NOT_PAIRED", "message": "Dashboard is not connected"
+            }, data.get("request_id")))
+            return
+        db = SessionLocal()
+        try:
+            device_ops.revoke_device(db, link.device_id)
+        finally:
+            db.close()
+        link.paired = False
+        await websocket.send_json(P.envelope(P.REVOKED, link.device_id, {}))
         return
 
     if msg_type == P.HEARTBEAT:
@@ -875,6 +961,25 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         return
 
     registry.handle_text(link, data)
+
+
+def _b64url_decode(value: str) -> bytes:
+    return base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
+
+
+def _verify_chat_identity(contact_id: str, public_key: str, signature: str, challenge: str, device_id: str) -> bool:
+    try:
+        public_bytes = _b64url_decode(public_key)
+        derived = base64.urlsafe_b64encode(hashlib.sha256(public_bytes).digest()[:18]).decode().rstrip("=")
+        if not secrets.compare_digest(derived, contact_id):
+            return False
+        key = serialization.load_der_public_key(public_bytes)
+        if not isinstance(key, ec.EllipticCurvePublicKey):
+            return False
+        key.verify(_b64url_decode(signature), f"{challenge}:{device_id}".encode(), ec.ECDSA(hashes.SHA256()))
+        return True
+    except (ValueError, TypeError, InvalidSignature):
+        return False
 
 
 async def _wait_queue_item(transfer, timeout: float):
