@@ -8,6 +8,8 @@ import androidx.compose.material3.Typography
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
@@ -68,8 +70,17 @@ fun PrivatChatTheme(mode: ThemeMode, content: @Composable () -> Unit) {
         ThemeMode.LIGHT -> false
         ThemeMode.DARK -> true
     }
+    val target = if (dark) DarkScheme else LightScheme
+    @Composable fun animated(color: Color) = animateColorAsState(color, tween(260), label = "theme-color").value
+    val scheme = target.copy(
+        primary = animated(target.primary), onPrimary = animated(target.onPrimary),
+        primaryContainer = animated(target.primaryContainer), onPrimaryContainer = animated(target.onPrimaryContainer),
+        secondary = animated(target.secondary), background = animated(target.background), surface = animated(target.surface),
+        surfaceVariant = animated(target.surfaceVariant), onSurface = animated(target.onSurface),
+        onSurfaceVariant = animated(target.onSurfaceVariant), outline = animated(target.outline), error = animated(target.error),
+    )
     MaterialTheme(
-        colorScheme = if (dark) DarkScheme else LightScheme,
+        colorScheme = scheme,
         shapes = PrivatShapes,
         typography = PrivatTypography,
         content = content,

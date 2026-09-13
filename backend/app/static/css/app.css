@@ -164,6 +164,13 @@ legend { color: var(--muted); padding: 0 6px; }
 .status-published, .status-approved { color: var(--ok); border-color: #2e6a4e; }
 .status-pending_review, .status-paused, .status-revision_requested { color: #e9b949; border-color: #725c25; }
 .status-rejected, .status-closed { color: var(--bad); border-color: #5a3038; }
+.filter-chips { display:flex; gap:.55rem; flex-wrap:wrap; margin:1rem 0; }
+.filter-chips button { border-radius:999px; padding:.55rem 1rem; }
+.filter-chips button.active { background:var(--accent); color:white; border-color:transparent; }
+.stack-list { display:grid; gap:.7rem; }
+.call-log-row { display:flex; align-items:center; justify-content:space-between; gap:1rem; }
+.call-log-row p { margin:.3rem 0 0; text-transform:capitalize; }
+.call-meta { display:grid; justify-items:end; gap:.3rem; color:var(--muted); font-size:.88rem; }
 
 @media (prefers-color-scheme: light) {
   :root {

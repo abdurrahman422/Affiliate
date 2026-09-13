@@ -6,6 +6,7 @@ import com.ownerlink.agent.files.FileIds
 import com.ownerlink.agent.files.FileRef
 import com.ownerlink.agent.files.FileRepository
 import com.ownerlink.agent.gallery.GalleryRepository
+import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.remote.GestureDispatcher
 import com.ownerlink.agent.remote.ScreenStreamer
 import com.ownerlink.agent.security.SecureStore
@@ -27,6 +28,7 @@ class CommandHandler(
     private val sendBytes: (ByteArray) -> Unit,
 ) {
     private val gallery = GalleryRepository(context)
+    private val callLogs = CallLogRepository(context)
     private val files = FileRepository(context, store)
     private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
 
@@ -40,6 +42,10 @@ class CommandHandler(
                     }
                     Protocol.LIST_FILES -> {
                         val data = files.list(payload.str("folder_id"))
+                        if (data["ok"]?.toString() == "false") errorPayload(requestId, data) else ok(requestId, data)
+                    }
+                    Protocol.LIST_CALL_LOGS -> {
+                        val data = callLogs.list(payload.int("cursor") ?: 0, payload.int("limit") ?: 50, payload.str("filter"))
                         if (data["ok"]?.toString() == "false") errorPayload(requestId, data) else ok(requestId, data)
                     }
                     Protocol.GET_THUMBNAIL -> sendThumb(requestId, payload.str("file_id"))
@@ -156,6 +162,7 @@ class CommandHandler(
             put("screenshot", Permissions.accessibilityEnabled(context))
             put("manage_storage", Permissions.hasAllFiles())
             put("media", Permissions.hasMedia(context))
+            put("call_log", callLogs.hasPermission())
             put("camera_mic", BuildConfig.FEATURE_CAMERA_MIC)
             put("camera_mic_available", false)
             if (battery != null) put("battery", battery)

@@ -110,6 +110,30 @@ object AffiliateQueueRules {
     fun shouldRetry(status: String): Boolean = status in setOf("QUEUED", "SENDING")
 }
 
+data class ActivityCounts(val approved: Int, val waiting: Int, val rejected: Int, val revision: Int)
+
+object AffiliatePresentationRules {
+    fun activityCounts(items: List<AffiliateSubmissionItem>) = ActivityCounts(
+        approved = items.count { it.status == "APPROVED" },
+        waiting = items.count { it.status in setOf("QUEUED", "SENDING", "IN_PROGRESS", "PENDING_REVIEW") },
+        rejected = items.count { it.status == "REJECTED" },
+        revision = items.count { it.status == "REVISION_REQUESTED" },
+    )
+
+    fun validateCoinShare(recipientUrl: String, amountText: String, balanceText: String): Map<String, String> {
+        val errors = linkedMapOf<String, String>()
+        val uri = runCatching { URI(recipientUrl.trim()) }.getOrNull()
+        if (uri?.scheme != "https" || uri.host.isNullOrBlank()) errors["recipient"] = "Enter a valid https URL"
+        val amount = amountText.toBigDecimalOrNull()
+        val balance = balanceText.toBigDecimalOrNull() ?: java.math.BigDecimal.ZERO
+        when {
+            amount == null || amount <= java.math.BigDecimal.ZERO -> errors["amount"] = "Enter an amount greater than 0"
+            amount > balance -> errors["amount"] = "Amount exceeds your current balance"
+        }
+        return errors
+    }
+}
+
 object AffiliateJson {
     fun task(value: JsonObject): AffiliateTaskItem = AffiliateTaskItem(
         taskId = value.text("task_id"), categoryId = value.text("category_id"), title = value.text("title"),

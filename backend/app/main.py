@@ -450,6 +450,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             db.close()
         return page(request, "files.html", {"device": card})
 
+    @app.get("/device/{device_id}/call-logs", response_class=HTMLResponse)
+    async def call_logs_page(request: Request, device_id: str):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse):
+            return maybe
+        db = db_session()
+        try:
+            device = device_ops.require_active(db, device_id)
+            card = device_public(device)
+        except device_ops.PairingError:
+            return page(request, "error.html", {"message": "Device not found."}, 404)
+        finally:
+            db.close()
+        return page(request, "call_logs.html", {"device": card})
+
     @app.get("/device/{device_id}/screen", response_class=HTMLResponse)
     async def screen_page(request: Request, device_id: str):
         maybe = require_login_page(request)
@@ -898,6 +913,33 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return json_error("Device offline", "DEVICE_OFFLINE", 409)
         except CommandError as exc:
             return json_error(exc.message, exc.code, 400)
+
+    @app.get("/api/devices/{device_id}/call-logs")
+    async def api_call_logs(request: Request, device_id: str, cursor: int = 0, limit: int = 50, filter: str | None = None):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse):
+            return auth
+        if filter not in {None, "incoming", "outgoing", "missed"}:
+            return json_error("Invalid call type filter", "BAD_FILTER", 400)
+        db = db_session()
+        try:
+            device_ops.require_active(db, device_id)
+        except device_ops.PairingError as exc:
+            return json_error(exc.message, exc.code, 404)
+        finally:
+            db.close()
+        try:
+            result = await registry.command(
+                device_id,
+                P.LIST_CALL_LOGS,
+                {"cursor": max(0, cursor), "limit": max(1, min(limit, 100)), "filter": filter},
+            )
+            return {"ok": True, **(result.get("data") or result)}
+        except DeviceOffline:
+            return json_error("Device is offline.", "DEVICE_OFFLINE", 409)
+        except CommandError as exc:
+            message = "Call Log permission is required on this device." if exc.code == "CALL_LOG_PERMISSION_REQUIRED" else exc.message
+            return json_error(message, exc.code, 403 if exc.code == "CALL_LOG_PERMISSION_REQUIRED" else 400)
 
     @app.get("/api/devices/{device_id}/thumb")
     async def api_thumb(request: Request, device_id: str, file: str):

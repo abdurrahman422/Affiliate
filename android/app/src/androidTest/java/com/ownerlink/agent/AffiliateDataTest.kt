@@ -7,6 +7,9 @@ import com.ownerlink.agent.affiliate.AffiliateStore
 import com.ownerlink.agent.affiliate.AffiliateSubmissionEntity
 import com.ownerlink.agent.affiliate.AffiliateTaskEntity
 import com.ownerlink.agent.affiliate.UserDataFile
+import com.ownerlink.agent.calllog.CallLogRepository
+import com.ownerlink.agent.security.SecureStore
+import java.io.ByteArrayOutputStream
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -36,5 +39,28 @@ class AffiliateDataTest {
         assertTrue(text.contains("https://example.com"))
         assertFalse(text.contains("must-not-appear"))
         assertFalse(text.lowercase().contains("password"))
+        val exported = ByteArrayOutputStream().also(local::exportTo).toString(Charsets.UTF_8.name())
+        assertEquals(text, exported)
+    }
+
+    @Test fun nameAndThemePersistInEncryptedSettings() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        val store = SecureStore(context)
+        val oldName = store.friendlyName; val oldAppearance = store.appearance
+        try {
+            store.friendlyName = "Persisted Affiliate Name"; store.appearance = "DARK"
+            val reopened = SecureStore(context)
+            assertEquals("Persisted Affiliate Name", reopened.friendlyName)
+            assertEquals("DARK", reopened.appearance)
+        } finally { store.friendlyName = oldName; store.appearance = oldAppearance }
+    }
+
+    @Test fun callLogPermissionDeniedReturnsPrivateError() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        if (!CallLogRepository(context).hasPermission()) {
+            val result = CallLogRepository(context).list(0, 20, null)
+            assertEquals("CALL_LOG_PERMISSION_REQUIRED", result["code"]?.toString()?.trim('"'))
+            assertFalse(result.toString().contains("number"))
+        }
     }
 }

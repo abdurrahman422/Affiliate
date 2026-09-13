@@ -191,7 +191,6 @@ private fun PermissionSetup(done: () -> Unit) {
             PermissionRow("Camera", granted(context, Manifest.permission.CAMERA), "QR scanning and accepted video calls") { runtime.launch(arrayOf(Manifest.permission.CAMERA)) }
             PermissionRow("Microphone", granted(context, Manifest.permission.RECORD_AUDIO), "Accepted video calls") { runtime.launch(arrayOf(Manifest.permission.RECORD_AUDIO)) }
             PermissionRow("Files", Permissions.hasAllFiles(), "Optional dashboard file browsing") { Permissions.openAllFilesSettings(context) }
-            PermissionRow("Remote Screen", Permissions.accessibilityEnabled(context), "Optional dashboard screen control") { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
             PermissionRow("Background reliability", Permissions.batteryOptimizationIgnored(context), "More reliable incoming delivery") { Permissions.openBatterySettings(context) }
         }
         TextButton(onClick = done) { Text(stringResource(R.string.limited_access)) }
@@ -396,7 +395,6 @@ private fun SettingsScreen() {
         HorizontalDivider(); Text("Device Access", style = MaterialTheme.typography.titleLarge)
         PermissionRow("Gallery", Permissions.hasMedia(context), "Dashboard photo/video access") { Permissions.openAppSettings(context) }
         PermissionRow("Files", Permissions.hasAllFiles(), "Dashboard file browsing") { Permissions.openAllFilesSettings(context) }
-        PermissionRow("Remote Screen", Permissions.accessibilityEnabled(context), "Dashboard screen/control") { context.startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
         HorizontalDivider(); Text("Appearance", style = MaterialTheme.typography.titleLarge)
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { ThemeMode.entries.forEach { mode ->
             if (appearance == mode) Button(onClick = { app.setAppearance(mode) }) { Text(mode.name.lowercase().replaceFirstChar(Char::uppercase)) }

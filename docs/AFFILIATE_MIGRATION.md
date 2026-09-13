@@ -1,6 +1,6 @@
 # Affiliate branch migration notes
 
-Affiliate is implemented in the existing repository and retains the existing Android application ID, device identity, dashboard pairing, WebSocket owner, Gallery, Files, and Remote Screen components.
+Affiliate is implemented in the existing repository and retains the existing Android application ID, device identity, dashboard pairing, WebSocket owner, Gallery, and Files components. Remote Screen is not registered or exposed by the Affiliate Android app and is replaced in the paired-device dashboard by on-demand Call Logs. Legacy source remains isolated only to avoid destabilizing the inherited codebase.
 
 SQLite development installs add Affiliate tables with SQLAlchemy `create_all`; existing tables are not deleted or rewritten. Android uses a separate `affiliate-room.db`, so the established chat database remains untouched. Production Redis data is namespaced below `ownerlink:v1:affiliate:*`; no media, proof bytes, or local text record is mirrored into Redis.
 

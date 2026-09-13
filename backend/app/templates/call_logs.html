@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Call Logs — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <p class="crumb"><a href="/devices">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Call Logs</p>
+  <h1>Call Logs</h1>
+  <p class="muted">Requested from the phone when needed. Call history is not retained by the server.</p>
+</div></div>
+<nav class="filter-chips" aria-label="Call type">
+  <button class="active" data-filter="">All</button><button data-filter="incoming">Incoming</button>
+  <button data-filter="outgoing">Outgoing</button><button data-filter="missed">Missed</button>
+</nav>
+<p id="call-log-status" class="banner">Loading recent calls…</p>
+<div id="call-log-list" class="stack-list" aria-live="polite"></div>
+<button id="call-log-more" class="hidden" type="button">Load more</button>
+{% endblock %}
+{% block scripts %}
+<script>window.OWNERLINK_DEVICE_ID = {{ device.device_id|tojson }};</script>
+<script src="/static/js/call_logs.js"></script>
+{% endblock %}

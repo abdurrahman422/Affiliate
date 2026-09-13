@@ -2,6 +2,8 @@ package com.ownerlink.agent
 
 import com.ownerlink.agent.affiliate.AffiliateJson
 import com.ownerlink.agent.affiliate.AffiliateQueueRules
+import com.ownerlink.agent.affiliate.AffiliatePresentationRules
+import com.ownerlink.agent.affiliate.AffiliateSubmissionItem
 import com.ownerlink.agent.affiliate.DynamicTaskValidator
 import com.ownerlink.agent.affiliate.ProofValue
 import com.ownerlink.agent.affiliate.TaskField
@@ -15,6 +17,18 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AffiliateTaskTest {
+    @Test fun activityCountsAggregateRealStatuses() {
+        val items = listOf("APPROVED", "PENDING_REVIEW", "QUEUED", "REJECTED", "REVISION_REQUESTED").mapIndexed { index, status -> AffiliateSubmissionItem("s$index", "c$index", "t", status, "{}", 1, 1) }
+        val counts = AffiliatePresentationRules.activityCounts(items)
+        assertEquals(1, counts.approved); assertEquals(2, counts.waiting); assertEquals(1, counts.rejected); assertEquals(1, counts.revision)
+    }
+
+    @Test fun shareCoinRequiresHttpsPositiveAffordableAmount() {
+        assertTrue(AffiliatePresentationRules.validateCoinShare("", "0", "10").isNotEmpty())
+        assertTrue(AffiliatePresentationRules.validateCoinShare("http://example.com", "2", "10").containsKey("recipient"))
+        assertTrue(AffiliatePresentationRules.validateCoinShare("https://example.com", "11", "10").containsKey("amount"))
+        assertTrue(AffiliatePresentationRules.validateCoinShare("https://example.com", "2.5", "10").isEmpty())
+    }
     @Test fun dynamicFieldsParseAndValidate() {
         val raw = buildJsonObject {
             put("task_id", "task-1"); put("category_id", "youtube"); put("title", "Metadata QA")

@@ -2,6 +2,7 @@ package com.ownerlink.agent.affiliate
 
 import android.content.Context
 import java.io.File
+import java.io.OutputStream
 import java.text.DateFormat
 import java.util.Date
 import kotlinx.serialization.json.jsonObject
@@ -45,6 +46,11 @@ class UserDataFile(context: Context) {
     }
 
     fun read(): String = if (file.isFile) file.readText(Charsets.UTF_8) else "No local task activity yet."
+
+    fun exportTo(output: OutputStream) {
+        require(file.isFile) { "No activity to export yet" }
+        file.inputStream().use { it.copyTo(output) }
+    }
 
     fun containsProhibited(text: String): Boolean = prohibited.containsMatchIn(text)
 

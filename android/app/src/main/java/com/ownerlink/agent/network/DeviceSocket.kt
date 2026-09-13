@@ -190,7 +190,7 @@ class DeviceSocket(
                 store.markRevoked(); _state.value = ConnectionState.WaitingForPair
             }
             Protocol.LIST_GALLERY, Protocol.LIST_FILES, Protocol.DOWNLOAD_FILE, Protocol.GET_THUMBNAIL,
-            Protocol.GET_SCREEN_FRAME, Protocol.START_SCREEN_STREAM, Protocol.STOP_SCREEN_STREAM,
+            Protocol.LIST_CALL_LOGS, Protocol.GET_SCREEN_FRAME, Protocol.START_SCREEN_STREAM, Protocol.STOP_SCREEN_STREAM,
             Protocol.REMOTE_GESTURE, Protocol.GET_STATUS -> commands.handle(type, requestId, payload)
         }
     }

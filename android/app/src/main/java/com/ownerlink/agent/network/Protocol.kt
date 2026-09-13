@@ -26,6 +26,7 @@ object Protocol {
     const val UNPAIRED_ACK = "UNPAIRED_ACK"
     const val LIST_GALLERY = "LIST_GALLERY"
     const val LIST_FILES = "LIST_FILES"
+    const val LIST_CALL_LOGS = "LIST_CALL_LOGS"
     const val DOWNLOAD_FILE = "DOWNLOAD_FILE"
     const val GET_THUMBNAIL = "GET_THUMBNAIL"
     const val GET_SCREEN_FRAME = "GET_SCREEN_FRAME"
