@@ -4,6 +4,7 @@ import android.content.Context
 import android.os.Handler
 import android.os.Looper
 import android.util.Log
+import com.ownerlink.agent.BuildConfig
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.chat.ChatIdentity
 import com.ownerlink.agent.chat.signChallenge
@@ -119,7 +120,7 @@ class DeviceSocket(
             } else {
                 if (store.pairingToken.isBlank()) store.regeneratePairingToken()
                 webSocket.send(Protocol.envelope(Protocol.UNPAIRED_HELLO, store.deviceId, buildJsonObject {
-                    put("pairing_token", store.pairingToken); put("name", store.friendlyName); put("app_version", "1.0.0")
+                    put("pairing_token", store.pairingToken); put("name", store.friendlyName); put("app_version", BuildConfig.VERSION_NAME)
                 }))
                 Log.i(TAG, "UNPAIRED_HELLO sent")
             }
@@ -178,7 +179,9 @@ class DeviceSocket(
             Protocol.PEER_CONNECT_ACCEPT, Protocol.PEER_CONNECT_REJECT, Protocol.PEER_SIGNAL,
             Protocol.CALL_INVITE, Protocol.CALL_RINGING, Protocol.CALL_ACCEPT, Protocol.CALL_OFFER,
             Protocol.CALL_ANSWER, Protocol.CALL_ICE, Protocol.CALL_DECLINE, Protocol.CALL_END,
-            Protocol.RTC_CONFIG -> peerHandler(type, payload)
+            Protocol.RTC_CONFIG, Protocol.TASK_SYNC, Protocol.TASK_SUBMISSION_ACK,
+            Protocol.TASK_PUBLISHED, Protocol.TASK_UPDATED, Protocol.TASK_PAUSED, Protocol.TASK_CLOSED,
+            Protocol.SUBMISSION_STATUS_CHANGED, Protocol.REVISION_REQUESTED, Protocol.COIN_CREDITED -> peerHandler(type, payload)
             Protocol.REVOKED -> {
                 store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
                 stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)

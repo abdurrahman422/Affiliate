@@ -3,11 +3,18 @@ package com.ownerlink.agent
 import com.ownerlink.agent.files.FileIds
 import com.ownerlink.agent.files.FileRef
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.File
 
 class FileIdsTest {
+    @Test fun appPrivateIdsRoundTripWithoutExposingAPath() {
+        val encoded = FileIds.encodeAppPrivate("proofs/abc_proof.png")
+        val decoded = FileIds.decode(encoded) as FileRef.AppPrivate
+        assertEquals("proofs/abc_proof.png", decoded.logicalName)
+        assertFalse(encoded.contains("Affiliate"))
+    }
     @Test
     fun galleryRoundTrip() {
         val id = FileIds.encodeGallery(99L)

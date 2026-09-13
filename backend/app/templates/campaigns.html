@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Campaigns — Affiliate{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Campaigns</h1><p class="muted">Group related work and control its lifecycle.</p></div></div>
+<section class="card form-card"><h2>New campaign</h2><form id="campaign-form" class="form-grid">
+  <label>Name<input name="name" maxlength="160" required></label>
+  <label>Description<textarea name="description" maxlength="5000" rows="3"></textarea></label>
+  <label>Start<input name="start_at" type="datetime-local"></label><label>End<input name="end_at" type="datetime-local"></label>
+  <label>Target<select name="eligibility_type"><option value="all">All devices</option><option value="devices">Selected devices</option><option value="users">Selected users</option><option value="groups">Device groups</option></select></label>
+  <label>Target IDs<input name="eligibility_ids" placeholder="Comma separated when selected"></label>
+  <label class="wide">Internal notes<textarea name="notes" maxlength="5000" rows="2"></textarea></label>
+  <div class="wide actions"><button class="primary" type="submit">Create campaign</button><span id="campaign-result" class="meta" role="status"></span></div>
+</form></section>
+<section class="section-head"><div><h2>All campaigns</h2><p class="muted">Published work remains available independently to every eligible device.</p></div></section>
+<div class="card-list">{% for item in campaigns %}<article class="card" data-campaign-id="{{ item.campaign_id }}">
+  <div class="row"><div><h2>{{ item.name }}</h2><p class="muted">{{ item.description }}</p></div><span class="pill status-{{ item.status|lower }}">{{ item.status }}</span></div>
+  <div class="actions lifecycle">{% for state in ['PUBLISHED','PAUSED','CLOSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}" {% if item.status == 'ARCHIVED' %}disabled{% endif %}>{{ state|title }}</button>{% endfor %}</div>
+</article>{% endfor %}{% if not campaigns %}<p class="empty">No campaigns yet.</p>{% endif %}</div>
+{% endblock %}
+{% block scripts %}<script src="/static/js/campaigns.js"></script>{% endblock %}

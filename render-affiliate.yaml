@@ -1,0 +1,40 @@
+# Preview-only blueprint. It intentionally creates a separate service and does
+# not replace the stable ownerlink production service defined in render.yaml.
+services:
+  - type: web
+    name: ownerlink-affiliate-preview
+    runtime: docker
+    plan: free
+    branch: Affiliate
+    autoDeploy: false
+    numInstances: 1
+    dockerContext: ./backend
+    dockerfilePath: ./backend/Dockerfile
+    healthCheckPath: /health
+    envVars:
+      - key: ENV
+        value: production
+      - key: STORAGE_BACKEND
+        value: redis
+      - key: OWNERLINK_BASE_URL
+        sync: false
+      - key: OWNERLINK_SECRET_KEY
+        generateValue: true
+      - key: OWNERLINK_ADMIN_USERNAME
+        sync: false
+      - key: OWNERLINK_ADMIN_PASSWORD
+        sync: false
+      - key: UPSTASH_REDIS_REST_URL
+        sync: false
+      - key: UPSTASH_REDIS_REST_TOKEN
+        sync: false
+      - key: STUN_URLS
+        value: stun:stun.l.google.com:19302
+      - key: TURN_URLS
+        sync: false
+      - key: TURN_SHARED_SECRET
+        sync: false
+      - key: TURN_REALM
+        value: affiliate
+      - key: TURN_CREDENTIAL_TTL
+        value: "3600"

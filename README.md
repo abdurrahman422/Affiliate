@@ -1,10 +1,12 @@
-# PrivatChat
+# Affiliate (branch product) / PrivatChat foundation
 
-PrivatChat evolves the existing OwnerLink Android, backend, dashboard, and remote-access foundation. The six numbered PrivatChat specification files beside this repository are authoritative for current product behavior.
+The `Affiliate` branch adds a distributed task, review, and coin-ledger product while preserving the existing authenticated device-access foundation. Stable production remains on `main`; use `docs/AFFILIATE_MIGRATION.md` and the separate `render-affiliate.yaml` preview blueprint before deployment.
+
+Affiliate reuses the hardened PrivatChat/OwnerLink Android, backend, dashboard, and remote-access foundation. The Affiliate specification package beside this repository is authoritative on this branch.
 
 Self-hosted remote access for Android phones you own. One website, multiple phones (for example Home Phone and Business Phone). Browse gallery and files, download originals through a live relay, and use a low-FPS remote screen with tap / swipe / Back / Home / Recents.
 
-There is no cloud sync, no public sign-up, and no remote shell.
+Task definitions, submissions, reviews, and the coin ledger sync through the private backend. There is no public sign-up, remote shell, bulk phone upload, or automatic upload of `user_data.txt`.
 
 ## Repository layout
 

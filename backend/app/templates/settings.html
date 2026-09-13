@@ -1,5 +1,5 @@
 {% extends "base.html" %}
-{% block title %}Settings — PrivatChat{% endblock %}
+{% block title %}Settings — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
@@ -26,4 +26,7 @@
   </form>
   <p class="muted">You can also run <code>python -m app.cli set-password</code> on the server.</p>
 </article>
+<section class="section-head"><div><h2>Notifications</h2><p class="muted">WebSocket events and Android WorkManager are active. FCM is enabled only when valid Firebase credentials are supplied.</p></div></section>
+<article class="card"><h2>Audit log</h2><p class="muted">Task, review, ledger, and administrative mutations. Secret values are never written here.</p>
+<div class="table-wrap"><table class="file-table"><thead><tr><th>Action</th><th>Entity</th><th>Actor</th><th>Time</th></tr></thead><tbody>{% for item in audit %}<tr><td>{{ item.action }}</td><td>{{ item.entity_type }} · {{ item.entity_id }}</td><td>{{ item.actor }}</td><td>{{ item.created_at }}</td></tr>{% endfor %}{% if not audit %}<tr><td colspan="4" class="empty">No audited changes yet.</td></tr>{% endif %}</tbody></table></div></article>
 {% endblock %}

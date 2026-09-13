@@ -1,35 +1,21 @@
 {% extends "base.html" %}
-{% block title %}Devices — PrivatChat{% endblock %}
+{% block title %}Overview — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div>
-    <h1>Devices</h1>
-    <p class="muted">Choose a phone to browse files, gallery, or the current screen.</p>
-  </div>
-  <a class="primary" href="/devices/add">+ Add Device</a>
+  <div><p class="eyebrow">Operations workspace</p><h1>Overview</h1><p class="muted">Tasks, reviews, rewards, and connected devices at a glance.</p></div>
+  <div class="actions"><a href="/devices/add">Add Device</a><a class="primary" href="/tasks">Create task</a></div>
 </div>
-<div id="device-grid" class="grid">
-  {% if not devices %}
-  <p class="empty">No devices paired yet. In PrivatChat, open Settings → Connect with Dashboard.</p>
-  {% endif %}
-  {% for d in devices %}
-  <article class="card device-card" data-device-id="{{ d.device_id }}">
-    <div class="row">
-      <h2>{{ d.name }}</h2>
-      <span class="pill {% if d.online %}ok{% else %}off{% endif %}">{% if d.online %}Online{% else %}Offline{% endif %}</span>
-    </div>
-    <p class="meta">
-      {% if d.battery is not none %}Battery {{ d.battery }}%{% if d.charging %} · charging{% endif %} · {% endif %}
-      {% if d.last_seen %}Last seen {{ d.last_seen }}{% else %}Never seen{% endif %}
-    </p>
-    <div class="actions">
-      <a class="primary" href="/device/{{ d.device_id }}">Open</a>
-      <button class="danger" data-remove="{{ d.device_id }}" data-name="{{ d.name }}">Remove</button>
-    </div>
-  </article>
-  {% endfor %}
+<div class="metric-grid">
+  <article class="metric"><span>Online devices</span><strong>{{ metrics.online_devices }}</strong></article>
+  <article class="metric"><span>Active tasks</span><strong>{{ metrics.active_tasks }}</strong></article>
+  <article class="metric"><span>Pending reviews</span><strong>{{ metrics.pending_reviews }}</strong></article>
+  <article class="metric"><span>Approved today</span><strong>{{ metrics.approved_today }}</strong></article>
+  <article class="metric"><span>Rejected today</span><strong>{{ metrics.rejected_today }}</strong></article>
+  <article class="metric"><span>Coins credited today</span><strong>{{ metrics.coins_credited_today }}</strong></article>
 </div>
-{% endblock %}
-{% block scripts %}
-<script src="/static/js/dashboard.js"></script>
+<section class="section-head"><div><h2>Recent submissions</h2><p class="muted">Latest work across eligible devices.</p></div><a href="/submissions">View all</a></section>
+<div class="table-wrap"><table class="file-table"><thead><tr><th>Task</th><th>Worker</th><th>Status</th><th>Submitted</th></tr></thead><tbody>
+{% for item in recent %}<tr><td>{{ item.task_title or item.task_id }}</td><td>{{ item.user_id }}</td><td><span class="pill status-{{ item.status|lower }}">{{ item.status|replace('_',' ') }}</span></td><td>{{ item.created_at }}</td></tr>{% endfor %}
+{% if not recent %}<tr><td colspan="4" class="empty">No submissions yet.</td></tr>{% endif %}
+</tbody></table></div>
 {% endblock %}

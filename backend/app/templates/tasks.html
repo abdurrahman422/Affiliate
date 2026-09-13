@@ -1,0 +1,28 @@
+{% extends "base.html" %}
+{% block title %}Tasks — Affiliate{% endblock %}
+{% block content %}
+<div class="page-head"><div><h1>Tasks</h1><p class="muted">Build schema-driven work once and publish it to every eligible device.</p></div></div>
+<section class="card form-card"><div class="section-head"><div><h2>Dynamic task builder</h2><p class="muted">Fields render on Android without a new APK.</p></div><button id="add-field" type="button">Add field</button></div>
+<form id="task-form" class="form-grid">
+  <label>Task name<input name="title" maxlength="200" required></label>
+  <label>Category<select name="category_id" required>{% for c in categories %}<option value="{{ c.category_id }}">{{ c.name }}</option>{% endfor %}</select></label>
+  <label>Campaign<select name="campaign_id"><option value="">No campaign</option>{% for c in campaigns %}<option value="{{ c.campaign_id }}">{{ c.name }}</option>{% endfor %}</select></label>
+  <label>Template<select id="template" name="template_id"><option value="">Start blank</option>{% for t in task_templates %}<option value="{{ t.template_id }}" data-category="{{ t.category_id }}" data-reward="{{ t.default_reward }}">{{ t.name }}</option>{% endfor %}</select></label>
+  <label class="wide">Description<textarea name="description" maxlength="5000" rows="2"></textarea></label>
+  <label class="wide">Instructions<textarea name="instructions" maxlength="10000" rows="4" required></textarea></label>
+  <label>Reward coins<input name="reward" type="number" min="0" step="0.001" value="0.50" required></label>
+  <label>Priority<input name="priority" type="number" min="0" max="100" value="0"></label>
+  <label>Per-device repeat limit<input name="repeat_limit" type="number" min="1" max="1000" value="1"></label>
+  <label>Total submission limit<input name="max_submissions" type="number" min="1" placeholder="Unlimited"></label>
+  <fieldset class="wide"><legend>Eligibility</legend><div class="inline-fields"><label>Target<select name="eligibility_type"><option value="all">All active devices</option><option value="devices">Selected devices</option><option value="users">Selected users</option><option value="groups">Device groups</option></select></label><label>IDs, comma separated<input name="eligibility_ids" placeholder="Only for selected targets"></label><label>Minimum quality score<input name="minimum_quality_score" type="number" min="0" max="100"></label></div></fieldset>
+  <div class="wide"><h3>Required fields and proof</h3><div id="field-builder" class="field-builder"></div></div>
+  <div class="wide actions"><button class="primary" type="submit">Save draft</button><span id="task-result" class="meta" role="status"></span></div>
+</form></section>
+<section class="section-head"><div><h2>Task library</h2><p class="muted">Publishing one task does not create 500 copies; each eligible worker gets an independent submission.</p></div></section>
+<div class="card-list">{% for item in tasks %}<article class="card" data-task-id="{{ item.task_id }}">
+  <div class="row"><div><p class="eyebrow">{{ item.category_id }} · {{ item.reward }} coin</p><h2>{{ item.title }}</h2><p class="muted">{{ item.description }}</p></div><span class="pill status-{{ item.status|lower }}">{{ item.status }}</span></div>
+  <p>{{ item.instructions }}</p><p class="meta">{{ item.field_schema|length }} fields · repeat {{ item.repeat_limit }}{% if item.max_submissions %} · {{ item.max_submissions }} total{% endif %}</p>
+  <div class="actions lifecycle">{% for state in ['PUBLISHED','PAUSED','CLOSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}" {% if item.status == 'ARCHIVED' %}disabled{% endif %}>{{ state|title }}</button>{% endfor %}</div>
+</article>{% endfor %}</div>
+{% endblock %}
+{% block scripts %}<script>window.AFFILIATE_TEMPLATES={{ task_templates|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}

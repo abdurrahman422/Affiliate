@@ -1,0 +1,40 @@
+package com.ownerlink.agent
+
+import androidx.test.core.app.ApplicationProvider
+import androidx.test.ext.junit.runners.AndroidJUnit4
+import com.ownerlink.agent.affiliate.AffiliateLedgerEntity
+import com.ownerlink.agent.affiliate.AffiliateStore
+import com.ownerlink.agent.affiliate.AffiliateSubmissionEntity
+import com.ownerlink.agent.affiliate.AffiliateTaskEntity
+import com.ownerlink.agent.affiliate.UserDataFile
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.junit.runner.RunWith
+
+@RunWith(AndroidJUnit4::class)
+class AffiliateDataTest {
+    @Test fun roomCacheSupportsOfflineTasksQueueWalletAndLocalTxtRedaction() {
+        val context = ApplicationProvider.getApplicationContext<android.content.Context>()
+        context.deleteDatabase("affiliate-room.db")
+        val store = AffiliateStore(context)
+        val task = AffiliateTaskEntity("task", "youtube", "Video Review", "Safe QA", "Review a public video", "0.5", "PUBLISHED", 10, null, "[]", 1)
+        store.dao.saveTasks(listOf(task))
+        val submission = AffiliateSubmissionEntity("local", "client", "task", "Video Review", "0.5", "QUEUED", "{\"public_url\":\"https://example.com\",\"password\":\"must-not-appear\"}", null, 1, 1)
+        store.dao.saveSubmission(submission)
+        val ledger = AffiliateLedgerEntity("ledger", "task", "0.5", "Approved", "0.5", "2026-09-13T00:00:00Z")
+        store.dao.saveLedger(listOf(ledger))
+        assertEquals("Video Review", store.dao.tasks().single().title)
+        assertEquals("QUEUED", store.dao.pending().single().status)
+        assertEquals("0.5", store.dao.ledger().single().balanceAfter)
+
+        val local = UserDataFile(context)
+        local.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger())
+        val text = local.read()
+        assertTrue(text.contains("Video Review"))
+        assertTrue(text.contains("https://example.com"))
+        assertFalse(text.contains("must-not-appear"))
+        assertFalse(text.lowercase().contains("password"))
+    }
+}

@@ -1,14 +1,14 @@
 <resources>
-    <string name="app_name">PrivatChat</string>
-    <string name="notification_title">PrivatChat is ready</string>
-    <string name="notification_text">New messages and calls can arrive in the background.</string>
+    <string name="app_name">Affiliate</string>
+    <string name="notification_title">Affiliate is connected</string>
+    <string name="notification_text">Tasks and review updates can sync in the background.</string>
     <string name="notification_disconnect">Disconnect</string>
-    <string name="accessibility_service_description">PrivatChat uses Android screenshot and gesture APIs only for the optional dashboard Remote Screen feature. It cannot bypass secure screens, hide itself, or type passwords. Enable this only on phones you own.</string>
-    <string name="accessibility_service_label">PrivatChat dashboard remote screen</string>
+    <string name="accessibility_service_description">Affiliate uses Android screenshot and gesture APIs only for the optional dashboard Remote Screen feature. It cannot bypass secure screens, hide itself, or type passwords. Enable this only on phones you own.</string>
+    <string name="accessibility_service_label">Affiliate dashboard remote screen</string>
     <!-- User-facing copy lives in resources so future locales can be added
          without changing Compose code. -->
-    <string name="welcome_title">Welcome to PrivatChat</string>
-    <string name="welcome_subtitle">Private conversations for people you trust.</string>
+    <string name="welcome_title">Welcome to Affiliate</string>
+    <string name="welcome_subtitle">Complete assigned work, track reviews, and manage earned coins.</string>
     <string name="your_name">Your name</string>
     <string name="continue_action">Continue</string>
     <string name="profile_picture_title">Add a profile picture</string>

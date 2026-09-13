@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block title %}Analytics — Affiliate{% endblock %}
+{% block content %}<div class="page-head"><div><h1>Analytics</h1><p class="muted">Operational outcomes from server-authoritative task data.</p></div></div>
+<div class="metric-grid"><article class="metric"><span>Active tasks</span><strong>{{ metrics.active_tasks }}</strong></article><article class="metric"><span>Submissions</span><strong>{{ metrics.submission_count }}</strong></article><article class="metric"><span>Pending reviews</span><strong>{{ metrics.pending_reviews }}</strong></article><article class="metric"><span>Completion rate</span><strong>{{ metrics.completion_rate }}%</strong></article><article class="metric"><span>Approval rate</span><strong>{{ metrics.approval_rate }}%</strong></article><article class="metric"><span>Coins credited</span><strong>{{ metrics.coins_credited }}</strong></article></div>
+<article class="card"><h2>Top categories</h2>{% for item in metrics.top_categories %}<p><strong>{{ item[0]|title }}</strong> · {{ item[1] }} tasks</p>{% endfor %}</article>
+<article class="card"><h2>Privacy-respecting analytics</h2><p class="muted">These totals use task, submission, and ledger metadata. Phone contents and the local user_data.txt file are never mirrored for analytics.</p></article>{% endblock %}

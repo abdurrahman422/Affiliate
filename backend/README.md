@@ -1,5 +1,7 @@
 # OwnerLink backend
 
+On the `Affiliate` branch this same service also provides campaigns, dynamic tasks, per-device submissions, review decisions, an idempotent server-authoritative coin ledger, audit history, and incremental WebSocket sync. It stores metadata only; explicit proof files and `user_data.txt` remain on the phone and are streamed on demand through the authorized Files channel.
+
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1

@@ -14,6 +14,7 @@ sealed class FileRef {
     data class Gallery(val mediaId: Long) : FileRef()
     data class Path(val canonical: String) : FileRef()
     data class Saf(val treeUri: String, val documentId: String) : FileRef()
+    data class AppPrivate(val logicalName: String) : FileRef()
 }
 
 object FileIds {
@@ -35,6 +36,11 @@ object FileIds {
         put("d", documentId)
     })
 
+    fun encodeAppPrivate(logicalName: String): String = encode(buildJsonObject {
+        put("k", "a")
+        put("n", logicalName)
+    })
+
     fun decode(id: String): FileRef {
         val obj = decodeObject(id)
         return when (obj["k"]?.jsonPrimitive?.contentOrNull) {
@@ -44,6 +50,7 @@ object FileIds {
                 obj["t"]?.jsonPrimitive?.contentOrNull ?: error("bad saf tree"),
                 obj["d"]?.jsonPrimitive?.contentOrNull ?: error("bad saf doc"),
             )
+            "a" -> FileRef.AppPrivate(obj["n"]?.jsonPrimitive?.contentOrNull ?: error("bad app file"))
             else -> error("unknown file id")
         }
     }

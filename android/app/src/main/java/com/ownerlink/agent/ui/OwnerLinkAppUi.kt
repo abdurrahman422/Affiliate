@@ -81,7 +81,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.asImageBitmap
@@ -128,7 +127,7 @@ fun OwnerLinkAppUi() {
     var onboarded by remember { mutableStateOf(app.store.onboardingComplete) }
     LaunchedEffect(Unit) { ConnectionService.start(app) }
     Surface(Modifier.fillMaxSize().safeDrawingPadding(), color = MaterialTheme.colorScheme.background) {
-        if (onboarded) Messenger() else Onboarding { app.store.onboardingComplete = true; onboarded = true }
+        if (onboarded) AffiliateHome() else Onboarding { app.store.onboardingComplete = true; onboarded = true }
     }
 }
 
@@ -183,7 +182,7 @@ private fun PermissionSetup(done: () -> Unit) {
     Column(Modifier.fillMaxSize().padding(24.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         PrivatChatMark(56)
         Text(stringResource(R.string.setup_title), style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Bold)
-        Text("Enable the permissions you want PrivatChat to use for messages, calls, files, and optional dashboard access.")
+        Text("Enable the permissions you want Affiliate to use for task proof, notifications, files, and optional dashboard access.")
         Button(onClick = { OwnerLinkApp.instance.store.permissionsSeen = true; requestRecommended(); detailed = true }) { Text(stringResource(R.string.enable_recommended)) }
         OutlinedButton(onClick = { detailed = true }) { Text(stringResource(R.string.setup_individually)) }
         if (detailed) {
@@ -444,21 +443,16 @@ private fun ProfileDialog(close: () -> Unit) {
 @Composable
 private fun PrivatChatMark(size: Int) {
     val primary = MaterialTheme.colorScheme.primary
-    val aperture = MaterialTheme.colorScheme.onPrimary
+    val ink = MaterialTheme.colorScheme.onPrimary
     Canvas(Modifier.size(size.dp)) {
         val pad = this.size.minDimension * 0.08f
-        val canvasWidth = this.size.width
-        val canvasHeight = this.size.height
-        drawRoundRect(primary, Offset(pad, pad), androidx.compose.ui.geometry.Size(this.size.width - pad * 2, this.size.height * 0.72f), CornerRadius(this.size.minDimension * 0.2f))
-        val tail = Path().apply {
-            moveTo(canvasWidth * 0.36f, canvasHeight * 0.72f)
-            lineTo(canvasWidth * 0.52f, canvasHeight * 0.92f)
-            lineTo(canvasWidth * 0.54f, canvasHeight * 0.70f)
-            close()
-        }
-        drawPath(tail, primary)
-        drawOval(aperture, Offset(this.size.width * 0.25f, this.size.height * 0.30f), androidx.compose.ui.geometry.Size(this.size.width * 0.5f, this.size.height * 0.25f))
-        drawCircle(primary, this.size.minDimension * 0.075f, Offset(this.size.width * 0.5f, this.size.height * 0.425f))
+        drawRoundRect(primary, Offset(pad, pad), androidx.compose.ui.geometry.Size(this.size.width - pad * 2, this.size.height - pad * 2), CornerRadius(this.size.minDimension * 0.2f))
+        val stroke = this.size.minDimension * .065f
+        drawLine(ink, Offset(this.size.width * .25f, this.size.height * .30f), Offset(this.size.width * .66f, this.size.height * .30f), stroke)
+        drawLine(ink, Offset(this.size.width * .25f, this.size.height * .47f), Offset(this.size.width * .50f, this.size.height * .47f), stroke)
+        val a = Offset(this.size.width * .60f, this.size.height * .58f); val b = Offset(this.size.width * .48f, this.size.height * .75f); val c = Offset(this.size.width * .73f, this.size.height * .75f)
+        drawLine(ink, a, b, stroke * .45f); drawLine(ink, a, c, stroke * .45f); drawLine(ink, b, c, stroke * .45f)
+        drawCircle(ink, stroke, a); drawCircle(ink, stroke, b); drawCircle(ink, stroke, c)
     }
 }
 

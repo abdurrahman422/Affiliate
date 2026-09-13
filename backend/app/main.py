@@ -35,6 +35,7 @@ from .auth import (
     logout_owner,
     require_csrf,
 )
+from .affiliate import AffiliateError, AffiliateService, coins_to_milli
 from .bootstrap import bootstrap_owner, validate_runtime_settings
 from .config import Settings, get_settings
 from .db import init_db, make_engine, session_factory
@@ -114,21 +115,22 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     with SessionLocal() as db:
         bootstrap_owner(db, settings)
+        AffiliateService(db).seed_demo()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        log.info("PrivatChat backend ready storage=%s worker_mode=single", "redis" if settings.uses_redis else "sqlite")
+        log.info("Affiliate backend ready storage=%s worker_mode=single", "redis" if settings.uses_redis else "sqlite")
         try:
             yield
         finally:
-            log.info("PrivatChat backend shutting down active_devices=%d", len(registry.links))
+            log.info("Affiliate backend shutting down active_devices=%d", len(registry.links))
             for link in list(registry.links.values()):
                 try:
                     await link.websocket.close(code=1012, reason="service restart")
                 except Exception:
                     pass
 
-    app = FastAPI(title="PrivatChat", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
+    app = FastAPI(title="Affiliate", docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
     app.state.settings = settings
     app.state.registry = registry
     app.state.engine = engine
@@ -275,9 +277,81 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         try:
             rows = device_ops.list_active_devices(db)
             cards = [device_public(d) for d in rows]
+            service = AffiliateService(db)
+            metrics = service.analytics()
+            recent = service.submissions(limit=8)
         finally:
             db.close()
-        return page(request, "dashboard.html", {"devices": cards})
+        metrics["online_devices"] = sum(bool(card["online"]) for card in cards)
+        return page(request, "dashboard.html", {"devices": cards, "metrics": metrics, "recent": recent})
+
+    @app.get("/devices", response_class=HTMLResponse)
+    async def devices_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse):
+            return maybe
+        db = db_session()
+        try:
+            cards = [device_public(d) for d in device_ops.list_active_devices(db)]
+        finally:
+            db.close()
+        return page(request, "devices.html", {"devices": cards})
+
+    @app.get("/campaigns", response_class=HTMLResponse)
+    async def campaigns_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: rows = AffiliateService(db).campaigns()
+        finally: db.close()
+        return page(request, "campaigns.html", {"campaigns": rows})
+
+    @app.get("/tasks", response_class=HTMLResponse)
+    async def tasks_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try:
+            service = AffiliateService(db)
+            rows, categories, task_templates, campaigns = service.tasks(), service.categories(), service.templates(), service.campaigns()
+        finally: db.close()
+        return page(request, "tasks.html", {"tasks": rows, "categories": categories, "task_templates": task_templates, "campaigns": campaigns})
+
+    @app.get("/submissions", response_class=HTMLResponse)
+    async def submissions_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: rows = AffiliateService(db).submissions()
+        finally: db.close()
+        return page(request, "submissions.html", {"submissions": rows, "review_only": False})
+
+    @app.get("/reviews", response_class=HTMLResponse)
+    async def reviews_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: rows = AffiliateService(db).submissions(status="PENDING_REVIEW")
+        finally: db.close()
+        return page(request, "submissions.html", {"submissions": rows, "review_only": True})
+
+    @app.get("/coin-ledger", response_class=HTMLResponse)
+    async def coin_ledger_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: rows = AffiliateService(db).ledger()
+        finally: db.close()
+        return page(request, "ledger.html", {"ledger": rows})
+
+    @app.get("/analytics", response_class=HTMLResponse)
+    async def analytics_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: metrics = AffiliateService(db).analytics()
+        finally: db.close()
+        return page(request, "analytics.html", {"metrics": metrics})
 
     @app.get("/devices/add", response_class=HTMLResponse)
     async def add_device_page(request: Request):
@@ -291,7 +365,10 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         maybe = require_login_page(request)
         if isinstance(maybe, RedirectResponse):
             return maybe
-        return page(request, "settings.html", {"message": None, "error": None})
+        db = db_session()
+        try: audit = AffiliateService(db).audit_log(limit=50)
+        finally: db.close()
+        return page(request, "settings.html", {"message": None, "error": None, "audit": audit})
 
     @app.post("/settings/password")
     async def change_password(
@@ -323,7 +400,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 else:
                     db.commit()
                 message = "Password updated."
-            return page(request, "settings.html", {"message": message, "error": error}, 400 if error else 200)
+            audit = AffiliateService(db).audit_log(limit=50)
+            return page(request, "settings.html", {"message": message, "error": error, "audit": audit}, 400 if error else 200)
         finally:
             db.close()
 
@@ -388,6 +466,222 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return page(request, "screen.html", {"device": card})
 
     # ----- JSON API -----
+    async def affiliate_admin_body(request: Request) -> tuple[Owner | JSONResponse, dict[str, Any] | None]:
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse):
+            return auth, None
+        body = await _safe_json(request)
+        try:
+            parse_csrf_from_form((body or {}).get("csrf_token"), request)
+        except HTTPException:
+            return json_error("Invalid CSRF token", "CSRF", 403), None
+        if body is None:
+            return json_error("Expected a JSON object", "BAD_REQUEST", 400), None
+        body.pop("csrf_token", None)
+        return auth, body
+
+    async def broadcast_task_event(event_type: str, task: dict[str, Any]) -> None:
+        payload = {"task_id": task["task_id"], "status": task["status"], "revision": task["revision"]}
+        for link in list(registry.links.values()):
+            if not link.contact_id:
+                continue
+            try:
+                await registry.send_json(link.device_id, P.envelope(event_type, link.device_id, payload))
+            except DeviceOffline:
+                pass
+
+    @app.get("/api/categories")
+    async def api_categories(request: Request):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "categories": AffiliateService(db).categories()}
+        finally: db.close()
+
+    @app.post("/api/categories")
+    async def api_create_category(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "category": AffiliateService(db).create_category(body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/templates")
+    async def api_templates(request: Request):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "templates": AffiliateService(db).templates()}
+        finally: db.close()
+
+    @app.post("/api/templates")
+    async def api_create_template(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "template": AffiliateService(db).create_template(body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/device-groups")
+    async def api_device_groups(request: Request):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "groups": AffiliateService(db).groups()}
+        finally: db.close()
+
+    @app.post("/api/device-groups")
+    async def api_create_device_group(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "group": AffiliateService(db).create_group(body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/campaigns")
+    async def api_campaigns(request: Request):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "campaigns": AffiliateService(db).campaigns()}
+        finally: db.close()
+
+    @app.post("/api/campaigns")
+    async def api_create_campaign(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            return {"ok": True, "campaign": AffiliateService(db).create_campaign(body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.post("/api/campaigns/{campaign_id}/status")
+    async def api_campaign_status(request: Request, campaign_id: str):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            value = AffiliateService(db).campaign_status(campaign_id, str((body or {}).get("status") or ""), auth.username)
+            return {"ok": True, "campaign": value}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/tasks")
+    async def api_tasks(request: Request, status_filter: str | None = None, category: str | None = None,
+                        cursor: int = 0, limit: int = 100):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            rows = AffiliateService(db).tasks(status=status_filter, category=category)
+            start, cap = max(0, cursor), max(1, min(limit, 200))
+            return {"ok": True, "tasks": rows[start:start + cap], "next_cursor": start + cap if start + cap < len(rows) else None}
+        finally: db.close()
+
+    @app.post("/api/tasks")
+    async def api_create_task(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            value = AffiliateService(db).create_task(body or {}, auth.username)
+            return {"ok": True, "task": value}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.put("/api/tasks/{task_id}")
+    async def api_update_task(request: Request, task_id: str):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: value = AffiliateService(db).update_task(task_id, body or {}, auth.username)
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+        await broadcast_task_event(P.TASK_UPDATED, value)
+        return {"ok": True, "task": value}
+
+    @app.post("/api/tasks/{task_id}/status")
+    async def api_task_status(request: Request, task_id: str):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            value = AffiliateService(db).task_status(task_id, str((body or {}).get("status") or ""), auth.username)
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+        event_type = {"PUBLISHED": P.TASK_PUBLISHED, "PAUSED": P.TASK_PAUSED, "CLOSED": P.TASK_CLOSED}.get(value["status"], P.TASK_UPDATED)
+        await broadcast_task_event(event_type, value)
+        return {"ok": True, "task": value}
+
+    @app.get("/api/submissions")
+    async def api_submissions(request: Request, status_filter: str | None = None, task_id: str | None = None,
+                              device_id: str | None = None, user_id: str | None = None, campaign_id: str | None = None,
+                              date_from: str | None = None, date_to: str | None = None, cursor: int = 0, limit: int = 100):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            rows = AffiliateService(db).submissions(status=status_filter, task_id=task_id, device_id=device_id, user_id=user_id,
+                                                     campaign_id=campaign_id, date_from=date_from, date_to=date_to, limit=1000)
+            start, cap = max(0, cursor), max(1, min(limit, 200))
+            return {"ok": True, "submissions": rows[start:start + cap], "next_cursor": start + cap if start + cap < len(rows) else None}
+        finally: db.close()
+
+    @app.post("/api/submissions/{submission_id}/review")
+    async def api_review_submission(request: Request, submission_id: str):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            submission, ledger = AffiliateService(db).review(submission_id, str((body or {}).get("decision") or ""),
+                                                               str((body or {}).get("reason") or ""), auth.username)
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+        link = registry.contacts.get(submission["user_id"])
+        if link:
+            event_type = P.COIN_CREDITED if submission["status"] == "APPROVED" else (P.REVISION_REQUESTED if submission["status"] == "REVISION_REQUESTED" else P.SUBMISSION_STATUS_CHANGED)
+            try:
+                await registry.send_json(link.device_id, P.envelope(event_type, link.device_id, {"submission": submission, "ledger": ledger}))
+            except DeviceOffline:
+                pass
+        return {"ok": True, "submission": submission, "ledger": ledger}
+
+    @app.get("/api/coin-ledger")
+    async def api_coin_ledger(request: Request, user_id: str | None = None, min_amount: str | None = None,
+                              max_amount: str | None = None, limit: int = 100):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "ledger": AffiliateService(db).ledger(user_id=user_id, limit=limit,
+            min_amount=coins_to_milli(min_amount) if min_amount not in (None, "") else None,
+            max_amount=coins_to_milli(max_amount) if max_amount not in (None, "") else None)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.post("/api/coin-ledger/adjust")
+    async def api_coin_adjust(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try:
+            entry = AffiliateService(db).manual_adjust(str((body or {}).get("user_id") or "").strip(), (body or {}).get("amount"),
+                str((body or {}).get("reason") or ""), auth.username, str((body or {}).get("idempotency_key") or "") or None)
+            return {"ok": True, "entry": entry}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/analytics")
+    async def api_analytics(request: Request):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "metrics": AffiliateService(db).analytics()}
+        finally: db.close()
+
     @app.get("/api/devices")
     async def api_devices(request: Request):
         auth = require_api_owner(request)
@@ -486,6 +780,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 friendly_name=name or None,
                 device_currently_connected=connected,
             )
+            AffiliateService(db).record_audit("DEVICE_PAIRED", "device", device_id, auth.username)
             link = registry.get(device_id)
             if link is not None:
                 link.paired = True
@@ -514,6 +809,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = db_session()
         try:
             device_ops.revoke_device(db, device_id)
+            AffiliateService(db).record_audit("DEVICE_REVOKED", "device", device_id, auth.username)
         except device_ops.PairingError as exc:
             return json_error(exc.message, exc.code, 404)
         finally:
@@ -548,6 +844,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = db_session()
         try:
             device = device_ops.rename_device(db, device_id, name)
+            AffiliateService(db).record_audit("DEVICE_RENAMED", "device", device_id, auth.username)
             return {"ok": True, "device": device_public(device)}
         except device_ops.PairingError as exc:
             return json_error(exc.message, exc.code, 404)
@@ -969,6 +1266,48 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
             return
         subject = link.contact_id
         await websocket.send_json(P.envelope(P.RTC_CONFIG, link.device_id, create_ice_configuration(registry.settings, subject)))
+        return
+
+    if msg_type == P.TASK_SYNC_REQUEST:
+        if not link.contact_id:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "TASK_IDENTITY_REQUIRED", "message": "Register task identity before syncing"
+            }, data.get("request_id")))
+            return
+        try:
+            cursor = max(0, int(payload.get("cursor") or 0))
+        except (TypeError, ValueError):
+            cursor = 0
+        db = SessionLocal()
+        try:
+            sync = AffiliateService(db).sync(link.contact_id, link.device_id, link.contact_name or "Affiliate worker", cursor)
+            await websocket.send_json(P.envelope(P.TASK_SYNC, link.device_id, sync, data.get("request_id")))
+        finally:
+            db.close()
+        return
+
+    if msg_type == P.TASK_SUBMIT:
+        if not link.contact_id:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "TASK_IDENTITY_REQUIRED", "message": "Register task identity before submitting"
+            }, data.get("request_id")))
+            return
+        if not link.allow_route(limit=30):
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "RATE_LIMITED", "message": "Too many task submissions"
+            }, data.get("request_id")))
+            return
+        db = SessionLocal()
+        try:
+            submission = AffiliateService(db).submit(
+                str(payload.get("task_id") or ""), str(payload.get("client_submission_id") or ""),
+                link.contact_id, link.device_id, payload.get("fields") or {},
+            )
+            await websocket.send_json(P.envelope(P.TASK_SUBMISSION_ACK, link.device_id, {"submission": submission}, data.get("request_id")))
+        except AffiliateError as exc:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {"code": exc.code, "message": exc.message}, data.get("request_id")))
+        finally:
+            db.close()
         return
 
     if msg_type == P.PRESENCE_QUERY:

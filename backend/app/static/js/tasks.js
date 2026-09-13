@@ -1,0 +1,51 @@
+(function () {
+  const form = document.getElementById("task-form");
+  const builder = document.getElementById("field-builder");
+  const types = ["short_text", "long_text", "url", "number", "dropdown", "multi_select", "checkbox", "datetime", "image", "file", "note"];
+  function fieldRow(value = {}) {
+    const row = document.createElement("div"); row.className = "builder-row";
+    const id = document.createElement("input"); id.placeholder = "field_id"; id.value = value.id || ""; id.setAttribute("aria-label", "Field identifier");
+    const label = document.createElement("input"); label.placeholder = "User-facing label"; label.value = value.label || ""; label.setAttribute("aria-label", "Field label");
+    const type = document.createElement("select"); type.setAttribute("aria-label", "Field type"); types.forEach((name) => { const option = document.createElement("option"); option.value = name; option.textContent = name.replaceAll("_", " "); option.selected = name === (value.type || "short_text"); type.appendChild(option); });
+    const requiredLabel = document.createElement("label"); requiredLabel.className = "check-label"; const required = document.createElement("input"); required.type = "checkbox"; required.checked = !!value.required; requiredLabel.append(required, document.createTextNode("Required"));
+    const choices = document.createElement("input"); choices.placeholder = "Choices / MIME types"; choices.value = (value.choices || value.allowed_types || []).join(", "); choices.setAttribute("aria-label", "Choices or allowed file types");
+    const minimum = document.createElement("input"); minimum.type = "number"; minimum.placeholder = "Min"; minimum.value = value.min_length ?? value.min ?? ""; minimum.setAttribute("aria-label", "Minimum length or value");
+    const maximum = document.createElement("input"); maximum.type = "number"; maximum.placeholder = "Max"; maximum.value = value.max_length ?? value.max ?? value.max_size_mb ?? ""; maximum.setAttribute("aria-label", "Maximum length, value, or megabytes");
+    const help = document.createElement("input"); help.placeholder = "Help text"; help.value = value.help_text || ""; help.setAttribute("aria-label", "Help text");
+    const up = document.createElement("button"); up.type = "button"; up.textContent = "↑"; up.setAttribute("aria-label", "Move field up"); up.addEventListener("click", () => { const previous = row.previousElementSibling; if (previous) builder.insertBefore(row, previous); });
+    const down = document.createElement("button"); down.type = "button"; down.textContent = "↓"; down.setAttribute("aria-label", "Move field down"); down.addEventListener("click", () => { const next = row.nextElementSibling; if (next) builder.insertBefore(next, row); });
+    const remove = document.createElement("button"); remove.type = "button"; remove.textContent = "Remove"; remove.className = "danger"; remove.addEventListener("click", () => row.remove());
+    const order = document.createElement("span"); order.className = "field-order"; order.append(up, down);
+    row.append(id, label, type, requiredLabel, choices, minimum, maximum, help, order, remove); builder.appendChild(row);
+  }
+  document.getElementById("add-field")?.addEventListener("click", () => fieldRow());
+  const templateSelect = document.getElementById("template");
+  templateSelect?.addEventListener("change", () => {
+    const template = (window.AFFILIATE_TEMPLATES || []).find((item) => item.template_id === templateSelect.value);
+    if (!template) return; builder.innerHTML = ""; template.field_schema.forEach(fieldRow);
+    form.elements.category_id.value = template.category_id; form.elements.reward.value = template.default_reward;
+  });
+  fieldRow({ id: "review_note", label: "Review notes", type: "long_text", required: true });
+  form?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const out = document.getElementById("task-result"); const fd = new FormData(form);
+    const fields = [...builder.querySelectorAll(".builder-row")].map((row) => {
+      const [id, label, type, required, choices, minimum, maximum, help] = row.querySelectorAll("input,select");
+      const value = { id: id.value.trim(), label: label.value.trim(), type: type.value, required: required.checked, help_text: help.value.trim() };
+      const options = choices.value.split(",").map((x) => x.trim()).filter(Boolean);
+      if (["dropdown", "multi_select"].includes(type.value)) value.choices = options;
+      if (["short_text", "long_text"].includes(type.value)) { if (minimum.value) value.min_length = Number(minimum.value); if (maximum.value) value.max_length = Number(maximum.value); }
+      if (type.value === "number") { if (minimum.value) value.min = Number(minimum.value); if (maximum.value) value.max = Number(maximum.value); }
+      if (["image", "file"].includes(type.value)) { value.max_size_mb = Number(maximum.value || 10); value.allowed_types = options; }
+      return value;
+    });
+    const eligibilityType = fd.get("eligibility_type");
+    const body = { title: fd.get("title"), category_id: fd.get("category_id"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), priority: fd.get("priority"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
+    try { await OwnerLink.api("/api/tasks", { method: "POST", body }); window.location.reload(); }
+    catch (error) { out.textContent = error.message; }
+  });
+  document.querySelectorAll("[data-task-id] [data-status]").forEach((button) => button.addEventListener("click", async () => {
+    const card = button.closest("[data-task-id]");
+    try { await OwnerLink.api(`/api/tasks/${card.dataset.taskId}/status`, { method: "POST", body: { status: button.dataset.status } }); window.location.reload(); }
+    catch (error) { alert(error.message); }
+  }));
+})();

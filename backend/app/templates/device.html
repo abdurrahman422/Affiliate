@@ -1,9 +1,9 @@
 {% extends "base.html" %}
-{% block title %}{{ device.name }} — PrivatChat{% endblock %}
+{% block title %}{{ device.name }} — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head">
   <div>
-    <p class="crumb"><a href="/">Devices</a> / {{ device.name }}</p>
+    <p class="crumb"><a href="/devices">Devices</a> / {{ device.name }}</p>
     <h1 id="device-title">{{ device.name }}</h1>
     <p class="meta">
       <span class="pill {% if device.online %}ok{% else %}off{% endif %}">{% if device.online %}Online{% else %}Offline{% endif %}</span>

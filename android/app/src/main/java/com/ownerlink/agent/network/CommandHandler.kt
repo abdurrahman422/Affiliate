@@ -150,7 +150,7 @@ class CommandHandler(
         val (battery, charging) = Battery.snapshot(context)
         return buildJsonObject {
             put("name", store.friendlyName)
-            put("app_version", "1.0.0")
+            put("app_version", BuildConfig.VERSION_NAME)
             put("paired", store.paired)
             put("accessibility", Permissions.accessibilityEnabled(context))
             put("screenshot", Permissions.accessibilityEnabled(context))

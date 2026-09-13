@@ -14,6 +14,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 import java.io.File
 import java.io.InputStream
+import com.ownerlink.agent.affiliate.UserDataFile
 
 class FileRepository(private val context: Context, private val store: SecureStore) {
     fun allowedRoots(): List<File> {
@@ -26,6 +27,8 @@ class FileRepository(private val context: Context, private val store: SecureStor
         if (folderId.isNullOrBlank()) {
             val items = ArrayList<JsonObject>()
             if (Permissions.hasAllFiles()) {
+                val local = UserDataFile(context).file
+                if (local.isFile) items.add(fileItem("user_data.txt", FileIds.encodeAppPrivate("user_data.txt"), local.length(), "text/plain", local.lastModified()))
                 val root = Environment.getExternalStorageDirectory().canonicalFile
                 items.add(folderItem(root.name.ifBlank { "Internal storage" }, FileIds.encodePath(root.path), null))
             }
@@ -57,6 +60,9 @@ class FileRepository(private val context: Context, private val store: SecureStor
                 put("ok", false)
                 put("code", "INVALID_PATH")
                 put("message", "Not a folder")
+            }
+            is FileRef.AppPrivate -> buildJsonObject {
+                put("ok", false); put("code", "INVALID_PATH"); put("message", "Not a folder")
             }
         }
     }
@@ -134,6 +140,16 @@ class FileRepository(private val context: Context, private val store: SecureStor
                 Triple(stream, name, null)
             }
             is FileRef.Gallery -> error("use gallery repository")
+            is FileRef.AppPrivate -> {
+                if (!Permissions.hasAllFiles()) error("permission missing")
+                val file = if (ref.logicalName == "user_data.txt") UserDataFile(context).file.canonicalFile else {
+                    if (!ref.logicalName.startsWith("proofs/") || ref.logicalName.contains("..")) error("path not allowed")
+                    val root = File(context.filesDir, "Affiliate/proofs").canonicalFile
+                    File(root, ref.logicalName.removePrefix("proofs/")).canonicalFile.also { FileIds.assertAllowedPath(it.path, listOf(root)) }
+                }
+                require(file.isFile) { "file not found" }
+                Triple(file.inputStream(), if (ref.logicalName == "user_data.txt") "user_data.txt" else file.name.substringAfter('_'), file.length())
+            }
         }
     }
 

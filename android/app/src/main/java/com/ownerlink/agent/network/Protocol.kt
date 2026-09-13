@@ -62,6 +62,17 @@ object Protocol {
     const val DASHBOARD_DISCONNECT = "DASHBOARD_DISCONNECT"
     const val RTC_CONFIG_REQUEST = "RTC_CONFIG_REQUEST"
     const val RTC_CONFIG = "RTC_CONFIG"
+    const val TASK_SYNC_REQUEST = "TASK_SYNC_REQUEST"
+    const val TASK_SYNC = "TASK_SYNC"
+    const val TASK_SUBMIT = "TASK_SUBMIT"
+    const val TASK_SUBMISSION_ACK = "TASK_SUBMISSION_ACK"
+    const val TASK_PUBLISHED = "TASK_PUBLISHED"
+    const val TASK_UPDATED = "TASK_UPDATED"
+    const val TASK_PAUSED = "TASK_PAUSED"
+    const val TASK_CLOSED = "TASK_CLOSED"
+    const val SUBMISSION_STATUS_CHANGED = "SUBMISSION_STATUS_CHANGED"
+    const val REVISION_REQUESTED = "REVISION_REQUESTED"
+    const val COIN_CREDITED = "COIN_CREDITED"
 
     val json = Json {
         ignoreUnknownKeys = true
