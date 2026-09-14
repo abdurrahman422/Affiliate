@@ -619,8 +619,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     async def broadcast_task_event(event_type: str, task: dict[str, Any]) -> None:
         payload = {"task_id": task["task_id"], "status": task["status"], "revision": task["revision"]}
         for link in list(registry.links.values()):
-            if not link.contact_id:
-                continue
             try:
                 await registry.send_json(link.device_id, P.envelope(event_type, link.device_id, payload))
             except DeviceOffline:
@@ -1450,11 +1448,6 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         return
 
     if msg_type == P.TASK_SYNC_REQUEST:
-        if not link.contact_id:
-            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
-                "code": "TASK_IDENTITY_REQUIRED", "message": "Register task identity before syncing"
-            }, data.get("request_id")))
-            return
         try:
             cursor = max(0, int(payload.get("cursor") or 0))
         except (TypeError, ValueError):
@@ -1462,19 +1455,18 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         db = SessionLocal()
         try:
             account = AffiliateAccountService(db).authenticate(str(payload.get("auth_token") or ""))
-            user_id = account["user_id"] if account else link.contact_id
-            sync = AffiliateService(db).sync(user_id, link.device_id, account.get("display_name", "Affiliate worker") if account else link.contact_name or "Affiliate worker", cursor)
+            if not account:
+                await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                    "code": "AUTH_REQUIRED", "message": "Affiliate login is required before syncing tasks"
+                }, data.get("request_id")))
+                return
+            sync = AffiliateService(db).sync(account["user_id"], link.device_id, account.get("display_name", "Affiliate worker"), cursor)
             await websocket.send_json(P.envelope(P.TASK_SYNC, link.device_id, sync, data.get("request_id")))
         finally:
             db.close()
         return
 
     if msg_type == P.TASK_SUBMIT:
-        if not link.contact_id:
-            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
-                "code": "TASK_IDENTITY_REQUIRED", "message": "Register task identity before submitting"
-            }, data.get("request_id")))
-            return
         if not link.allow_route(limit=30):
             await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
                 "code": "RATE_LIMITED", "message": "Too many task submissions"
@@ -1483,10 +1475,14 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         db = SessionLocal()
         try:
             account = AffiliateAccountService(db).authenticate(str(payload.get("auth_token") or ""))
-            user_id = account["user_id"] if account else link.contact_id
+            if not account:
+                await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                    "code": "AUTH_REQUIRED", "message": "Affiliate login is required before submitting tasks"
+                }, data.get("request_id")))
+                return
             submission = AffiliateService(db).submit(
                 str(payload.get("task_id") or ""), str(payload.get("client_submission_id") or ""),
-                user_id, link.device_id, payload.get("fields") or {},
+                account["user_id"], link.device_id, payload.get("fields") or {},
             )
             await websocket.send_json(P.envelope(P.TASK_SUBMISSION_ACK, link.device_id, {"submission": submission}, data.get("request_id")))
         except AffiliateError as exc:
