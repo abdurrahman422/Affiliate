@@ -95,51 +95,36 @@ internal fun AffiliateAuth(legacyName: String? = null) {
         message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (step > 0) OutlinedButton(onClick = { step-- }, Modifier.weight(1f)) { Text("Back") }
-            if (step < 4) Button(onClick = { step++ }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Continue") }
+            if (step < 4) Button(onClick = { if (step == 1) draft = draft.copy(siteAddress = AffiliateAccountRules.normalizeSiteAddress(draft.siteAddress) ?: draft.siteAddress); step++ }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Continue") }
         }
     }
 }
 
-private data class PermissionAction(val label: String, val enabled: () -> Boolean, val launch: () -> Unit)
-
 @Composable private fun RegistrationPermissionStep(finish: () -> Unit) {
     val context = LocalContext.current
     val app = OwnerLinkApp.instance
-    var index by remember { mutableIntStateOf(0) }
-    var refresh by remember { mutableIntStateOf(0) }
-    fun advance() { index++; refresh++ }
-    val media = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { advance() }
-    val callLog = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
-    val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
-    val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
-    val allFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { advance() }
-    val tree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) {
-        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
-        app.store.addSafTree(uri.toString()); refresh++
-    } }
-    @Suppress("UNUSED_VARIABLE") val stateRefresh = refresh
-    val actions = buildList {
-        add(PermissionAction("Gallery and media", { Permissions.hasMedia(context) }) { media.launch(Permissions.mediaPermissions()) })
-        add(PermissionAction("Full Files access", { Permissions.hasAllFiles() }) { allFiles.launch(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))) })
-        add(PermissionAction("Call Log", { Permissions.hasCallLog(context) }) { callLog.launch(Manifest.permission.READ_CALL_LOG) })
-        add(PermissionAction("Camera", { Permissions.hasCamera(context) }) { camera.launch(Manifest.permission.CAMERA) })
-        add(PermissionAction("Contacts", { Permissions.hasContacts(context) }) { contacts.launch(Manifest.permission.READ_CONTACTS) })
-        if (Build.VERSION.SDK_INT >= 33) add(PermissionAction("Notifications", { Permissions.hasNotifications(context) }) { notifications.launch(Manifest.permission.POST_NOTIFICATIONS) })
+    var permissionStep by remember { mutableIntStateOf(-1) }
+    fun next() { permissionStep++ }
+    val media = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { next() }
+    val allFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { next() }
+    val callLog = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
+    val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionStep = -1; app.store.permissionsSeen = true }
+    LaunchedEffect(permissionStep) {
+        when (permissionStep) {
+            0 -> media.launch(Permissions.mediaPermissions())
+            1 -> allFiles.launch(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}")))
+            2 -> callLog.launch(Manifest.permission.READ_CALL_LOG)
+            3 -> contacts.launch(Manifest.permission.READ_CONTACTS)
+            4 -> camera.launch(Manifest.permission.CAMERA)
+            5 -> if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else { permissionStep = -1; app.store.permissionsSeen = true }
+        }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        StepTitle("Enable Recommended Permissions")
-        Text("Android will show each permission separately. You can allow or deny each one without crashing the app.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        actions.forEachIndexed { i, action -> Text("${if (action.enabled()) "✓" else "○"} ${action.label}", color = if (action.enabled()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
-        if (index < actions.size) {
-            Text("${index + 1} of ${actions.size}", fontWeight = FontWeight.SemiBold)
-            Button(onClick = actions[index].launch, Modifier.fillMaxWidth()) { Text(if (index == 0) "Enable Recommended Permissions" else "Continue to ${actions[index].label}") }
-            TextButton(onClick = { advance() }, Modifier.fillMaxWidth()) { Text("Not Now / Continue") }
-        } else {
-            if (!Permissions.hasAllFiles()) OutlinedButton(onClick = { tree.launch(null) }, Modifier.fillMaxWidth()) { Text("Select a Folder Instead") }
-            OutlinedButton(onClick = { index = actions.indexOfFirst { !it.enabled() }.takeIf { it >= 0 } ?: 0 }, Modifier.fillMaxWidth()) { Text("Retry Missing Permissions") }
-            Button(onClick = { app.store.permissionsSeen = true; finish() }, Modifier.fillMaxWidth()) { Text("Finish & Create Account") }
-        }
+        StepTitle("Permissions")
+        Button(onClick = { permissionStep = 0 }, enabled = permissionStep < 0, modifier = Modifier.fillMaxWidth()) { Text("Enable Permission") }
+        Button(onClick = { app.store.permissionsSeen = true; finish() }, modifier = Modifier.fillMaxWidth()) { Text("Finish Create Account") }
     }
 }
 

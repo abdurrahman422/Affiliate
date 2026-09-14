@@ -7,6 +7,7 @@ import secrets
 import uuid
 from datetime import datetime, timedelta
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from sqlalchemy.exc import IntegrityError
 
@@ -18,6 +19,16 @@ from .storage import RedisStore
 
 EDUCATION = {"SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other"}
 WITHDRAWAL = {"bKash", "Nagad"}
+
+
+def normalize_site_address(value: Any) -> str:
+    raw = str(value or "").strip()
+    if not raw: raise AffiliateError("Site address is required", "INVALID_SITE_ADDRESS")
+    without_scheme = re.sub(r"^https?://", "", raw, flags=re.IGNORECASE).lstrip("/")
+    parsed = urlsplit("https://" + without_scheme)
+    if not parsed.hostname or "." not in parsed.hostname or parsed.username or parsed.password:
+        raise AffiliateError("Enter a valid site address", "INVALID_SITE_ADDRESS")
+    return urlunsplit(("https", parsed.netloc, parsed.path, parsed.query, parsed.fragment))[:300]
 
 
 def normalize_bd_phone(value: Any) -> str:
@@ -37,7 +48,7 @@ def validate_registration(raw: dict[str, Any], require_photo: bool = True) -> di
     if age < 13 or age > 100: raise AffiliateError("Age must be between 13 and 100", "INVALID_AGE")
     education = str(raw.get("education") or "").strip()
     if education not in EDUCATION: raise AffiliateError("Choose a valid educational qualification", "INVALID_EDUCATION")
-    address, site = str(raw.get("address") or "").strip(), str(raw.get("site_address") or "").strip()
+    address, site = str(raw.get("address") or "").strip(), normalize_site_address(raw.get("site_address"))
     if not 3 <= len(address) <= 500: raise AffiliateError("Address is required", "INVALID_ADDRESS")
     if not 2 <= len(site) <= 300: raise AffiliateError("Site address is required", "INVALID_SITE_ADDRESS")
     method = str(raw.get("withdrawal_method") or "").strip()
@@ -152,7 +163,7 @@ class AffiliateAccountService:
             if field in raw:
                 value = str(raw[field]).strip()
                 if len(value) < 2: raise AffiliateError(f"{field.replace('_', ' ').title()} is required", "INVALID_PROFILE")
-                patch[field] = value[:limit]
+                patch[field] = normalize_site_address(value) if field == "site_address" else value[:limit]
         if "withdrawal_number" in raw: patch["withdrawal_number"] = normalize_bd_phone(raw["withdrawal_number"])
         if raw.get("profile_photo_base64"):
             photo, mime = _photo(raw["profile_photo_base64"], raw.get("profile_photo_mime"), True)

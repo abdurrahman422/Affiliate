@@ -4,6 +4,7 @@ import android.content.Context
 import com.ownerlink.agent.network.Protocol
 import com.ownerlink.agent.security.SecureStore
 import java.util.Locale
+import java.net.URI
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,6 +43,14 @@ sealed interface AffiliateAuthState {
 }
 
 object AffiliateAccountRules {
+    fun normalizeSiteAddress(value: String): String? {
+        val raw = value.trim()
+        if (raw.isBlank()) return null
+        val normalized = if (raw.startsWith("https://", true)) "https://" + raw.substringAfter("://")
+            else "https://" + raw.removePrefix("http://").trimStart('/')
+        return runCatching { URI(normalized) }.getOrNull()?.takeIf { it.host?.contains('.') == true }?.toString()
+    }
+
     fun normalizePhone(value: String): String? {
         var digits = value.filter(Char::isDigit)
         if (digits.startsWith("880")) digits = "0" + digits.drop(3)
@@ -55,7 +64,7 @@ object AffiliateAccountRules {
         val age = draft.age.toIntOrNull(); if (age == null || age !in 13..100) errors["age"] = "Age must be between 13 and 100"
         if (draft.education !in setOf("SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other")) errors["education"] = "Choose your qualification"
         if (draft.address.trim().length < 3) errors["address"] = "Address is required"
-        if (draft.siteAddress.trim().length < 2) errors["siteAddress"] = "Site address is required"
+        if (normalizeSiteAddress(draft.siteAddress) == null) errors["siteAddress"] = "Enter a valid site address"
         if (draft.withdrawalMethod !in setOf("bKash", "Nagad")) errors["withdrawalMethod"] = "Choose bKash or Nagad"
         if (normalizePhone(draft.withdrawalNumber) == null) errors["withdrawalNumber"] = "Enter a valid payout number"
         if (draft.password.length < 8 || draft.password.none(Char::isLetter) || draft.password.none(Char::isDigit)) errors["password"] = "Use 8+ characters with letters and numbers"
@@ -84,7 +93,7 @@ class AffiliateAccountController(
         if (errors.isNotEmpty()) { _message.value = errors.values.first(); return }
         request("/api/auth/register", "POST", buildJsonObject {
             put("full_name", draft.fullName.trim()); put("phone_number", draft.phoneNumber); put("age", draft.age.toInt())
-            put("education", draft.education); put("address", draft.address.trim()); put("site_address", draft.siteAddress.trim())
+            put("education", draft.education); put("address", draft.address.trim()); put("site_address", AffiliateAccountRules.normalizeSiteAddress(draft.siteAddress) ?: draft.siteAddress.trim())
             put("withdrawal_method", draft.withdrawalMethod); put("withdrawal_number", draft.withdrawalNumber)
             put("password", draft.password); put("confirm_password", draft.confirmPassword)
             put("profile_photo_base64", draft.profilePhotoBase64); put("profile_photo_mime", draft.profilePhotoMime); put("device_id", store.deviceId)
