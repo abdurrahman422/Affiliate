@@ -3,11 +3,15 @@ package com.ownerlink.agent.security
 import android.content.Context
 import android.content.SharedPreferences
 import android.os.Build
+import android.util.Log
 import androidx.security.crypto.EncryptedSharedPreferences
 import androidx.security.crypto.MasterKeys
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
+import java.util.concurrent.FutureTask
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 import com.ownerlink.agent.BuildConfig
 
 class SecureStore(private val context: Context) {
@@ -16,10 +20,34 @@ class SecureStore(private val context: Context) {
     private var encrypted: SharedPreferences? = null
 
     init {
-        encrypted = createEncrypted()
-        requireNotNull(encrypted) { "Android encrypted storage is unavailable" }
-        migrateLegacyFallback()
+        encrypted = openEncryptedWithTimeout()
+        if (encrypted != null) migrateLegacyFallback()
         ensureIdentity()
+    }
+
+    /**
+     * Android Keystore can occasionally stop responding on some vendor builds.  MasterKeys is a
+     * blocking API, so calling it directly from Application.onCreate can leave the app on its
+     * splash screen until Android reports an ANR.  Keep that work off the main thread and put a
+     * strict upper bound on startup.  A timeout never deletes or replaces the existing encrypted
+     * preferences; the already-supported fallback remains available for this process instead.
+     */
+    private fun openEncryptedWithTimeout(): SharedPreferences? {
+        if (keystoreUnavailableForProcess) return null
+        val task = FutureTask { createEncrypted() }
+        Thread(task, "ownerlink-secure-store").apply { isDaemon = true }.start()
+        return try {
+            task.get(KEYSTORE_STARTUP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (_: TimeoutException) {
+            keystoreUnavailableForProcess = true
+            task.cancel(true)
+            Log.w(TAG, "Encrypted storage startup timed out; using fallback storage")
+            null
+        } catch (_: Exception) {
+            keystoreUnavailableForProcess = true
+            Log.w(TAG, "Encrypted storage unavailable; using fallback storage")
+            null
+        }
     }
 
     private fun migrateLegacyFallback() {
@@ -53,8 +81,7 @@ class SecureStore(private val context: Context) {
     }
 
     private fun prefs(): SharedPreferences {
-        if (encrypted == null) encrypted = createEncrypted()
-        return requireNotNull(encrypted) { "Android encrypted storage is unavailable" }
+        return encrypted ?: fallback
     }
 
     private fun ensureIdentity() {
@@ -157,6 +184,9 @@ class SecureStore(private val context: Context) {
     }
 
     companion object {
+        private const val TAG = "OwnerLinkSecureStore"
+        private const val KEYSTORE_STARTUP_TIMEOUT_MS = 1_500L
+        @Volatile private var keystoreUnavailableForProcess = false
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_PAIRING = "pairing_token"
         private const val KEY_SESSION = "session_token"
