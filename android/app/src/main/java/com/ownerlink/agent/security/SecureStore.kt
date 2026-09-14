@@ -60,13 +60,10 @@ class SecureStore(private val context: Context) {
     private fun ensureIdentity() {
         if (deviceId.isBlank()) deviceId = UUID.randomUUID().toString()
         if (pairingToken.isBlank()) pairingToken = newPairingToken()
-        if (BuildConfig.DEBUG) serverUrl = BuildConfig.AFFILIATE_SERVER_URL
-        else if (serverUrl.isBlank() || serverUrl == LEGACY_OWNERLINK_SERVER) serverUrl = BuildConfig.AFFILIATE_SERVER_URL
     }
 
-    var serverUrl: String
-        get() = prefs().getString(KEY_SERVER, "") ?: ""
-        set(value) { prefs().edit().putString(KEY_SERVER, value.trim().trimEnd('/')).apply() }
+    val serverUrl: String
+        get() = BuildConfig.BASE_URL
 
     var deviceId: String
         get() = prefs().getString(KEY_DEVICE_ID, "") ?: ""
@@ -160,7 +157,6 @@ class SecureStore(private val context: Context) {
     }
 
     companion object {
-        private const val KEY_SERVER = "server_url"
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_PAIRING = "pairing_token"
         private const val KEY_SESSION = "session_token"
@@ -177,8 +173,6 @@ class SecureStore(private val context: Context) {
         private const val KEY_AFFILIATE_PROFILE = "affiliate_profile_json"
         private const val KEY_CHAT_PRIVATE = "privatchat_identity_private"
         private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
-        const val PRODUCTION_SERVER = "https://ownerlink-affiliate.onrender.com"
-        private const val LEGACY_OWNERLINK_SERVER = "https://ownerlink-curr.onrender.com"
 
         fun newPairingToken(): String {
             val bytes = ByteArray(32)

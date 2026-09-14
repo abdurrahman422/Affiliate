@@ -1,5 +1,8 @@
 import java.util.Properties
 
+// Single source of truth for every Android API and WebSocket connection.
+val affiliateBaseUrl = "https://ownerlink-affiliate.onrender.com"
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -21,12 +24,12 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 7
-        versionName = "2.3.1-affiliate"
+        versionCode = 8
+        versionName = "2.3.2-affiliate"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
-        buildConfigField("String", "AFFILIATE_SERVER_URL", "\"https://ownerlink-affiliate.onrender.com\"")
+        buildConfigField("String", "BASE_URL", "\"$affiliateBaseUrl\"")
     }
 
     signingConfigs {
@@ -40,13 +43,11 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "AFFILIATE_SERVER_URL", "\"http://127.0.0.1:8000\"")
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
             buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             manifestPlaceholders["usesCleartext"] = "true"
         }
         release {
-            buildConfigField("String", "AFFILIATE_SERVER_URL", "\"https://ownerlink-affiliate.onrender.com\"")
             // WebRTC's native JNI bootstrap crashes on Android 12 when this
             // dependency is rewritten by R8. Keep the signed release unminified
             // until the WebRTC artifact can be upgraded and validated separately.

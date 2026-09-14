@@ -75,7 +75,6 @@ class DeviceSocket(
     /** Idempotent: CONNECTING and CONNECTED states never create/replace a socket. */
     @Synchronized fun connect() {
         stopRequested.set(false)
-        if (store.serverUrl.isBlank()) { _message.value = "Set a server URL first"; return }
         open(lifecycle.connectRequested())
     }
 
