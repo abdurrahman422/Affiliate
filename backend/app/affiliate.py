@@ -764,7 +764,8 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
             raise
         return self._ledger(ledger_row)
 
-    def manual_adjust(self, user_id: str, amount_raw: Any, reason: str, actor: str, idempotency_key: str | None = None) -> dict[str, Any]:
+    def manual_adjust(self, user_id: str, amount_raw: Any, reason: str, actor: str, idempotency_key: str | None = None,
+                      entry_type: str = "MANUAL_ADJUSTMENT") -> dict[str, Any]:
         amount, reason = coins_to_milli(amount_raw), reason.strip()
         if not (3 <= len(user_id) <= 128): raise AffiliateError("A valid user id is required", "INVALID_USER")
         if amount == 0 or len(reason) < 3: raise AffiliateError("A non-zero amount and clear reason are required", "INVALID_ADJUSTMENT")
@@ -775,16 +776,21 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
         after = int(user.get("balance_milli", 0)) + amount
         ledger_id = str(uuid.uuid4())
         value = {"ledger_id": ledger_id, "user_id": user_id, "submission_id": None, "task_id": None,
-                 "amount_milli": amount, "amount": milli_to_coins(amount), "entry_type": "MANUAL_ADJUSTMENT", "reason": reason[:500],
+                 "amount_milli": amount, "amount": milli_to_coins(amount), "entry_type": entry_type[:32], "reason": reason[:500],
                  "actor": actor, "idempotency_key": idem, "balance_after_milli": after, "balance_after": milli_to_coins(after), "created_at": now_iso()}
         if self.redis:
             if self.db._cmd("SET", self._key("ledger:idem", idem), ledger_id, "NX") is None:  # type: ignore[attr-defined]
                 return self._ledger_by_idempotency(idem) or value
             user["balance_milli"], user["updated_at"] = after, now_iso(); self._rsave("user", user_id, user); self._rsave("ledger", ledger_id, value)
+            account_key = self.db._key(f"affiliate:account:user:{user_id}")
+            account = self.db._get(account_key)
+            if account:
+                account["balance_milli"], account["updated_at"] = after, user["updated_at"]
+                self.db._set(account_key, account)
         else:
             row = self.db.get(AffiliateUser, user_id)  # type: ignore[union-attr]
             row.balance_milli = after
-            self.db.add(AffiliateCoinLedger(ledger_id=ledger_id, user_id=user_id, amount_milli=amount, entry_type="MANUAL_ADJUSTMENT",
+            self.db.add(AffiliateCoinLedger(ledger_id=ledger_id, user_id=user_id, amount_milli=amount, entry_type=entry_type[:32],
                 reason=reason[:500], actor=actor, idempotency_key=idem, balance_after_milli=after))  # type: ignore[union-attr]
         self._audit("COIN_ADJUSTED", "user", user_id, actor, {"ledger_id": ledger_id}); self._commit(); return value
 

@@ -932,7 +932,19 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 friendly_name=name or None,
                 device_currently_connected=connected,
             )
-            AffiliateService(db).record_audit("DEVICE_PAIRED", "device", device_id, auth.username)
+            affiliate = AffiliateService(db)
+            affiliate.record_audit("DEVICE_PAIRED", "device", device_id, auth.username)
+            account = AffiliateAccountService(db).by_device_id(device_id)
+            bonus = None
+            if account:
+                bonus = affiliate.manual_adjust(
+                    account["user_id"],
+                    "20",
+                    "Dashboard connection bonus",
+                    "system",
+                    idempotency_key=f"dashboard-connection-bonus:{account['user_id']}",
+                    entry_type="DASHBOARD_BONUS",
+                )
             link = registry.get(device_id)
             if link is not None:
                 link.paired = True
@@ -941,6 +953,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                         device_id,
                         P.envelope(P.PAIR_SUCCESS, device_id, {"session_token": session_token}),
                     )
+                    if bonus is not None:
+                        await registry.send_json(
+                            device_id,
+                            P.envelope(P.COIN_CREDITED, device_id, {"ledger": bonus, "reason": "Dashboard connection bonus"}),
+                        )
                 except DeviceOffline:
                     return json_error("Device disconnected during pairing", "DEVICE_OFFLINE", 409)
             return {"ok": True, "device": device_public(device)}

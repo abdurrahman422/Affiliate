@@ -205,6 +205,23 @@ class AffiliateAccountService:
         else: rows = [self._row(row) for row in self.db.query(AffiliateUser).filter(AffiliateUser.registered.is_(True)).all()]
         return [self.admin(row) for row in rows if row]
 
+    def by_device_id(self, device_id: str) -> dict[str, Any] | None:
+        """Return the registered Affiliate account currently bound to a device."""
+        if not device_id:
+            return None
+        if self.redis:
+            ids = self.db._cmd("SMEMBERS", self._key("users")) or []
+            for value in ids:
+                account = self.get(str(value), include_private=True)
+                if account and account.get("registered") and account.get("device_id") == device_id:
+                    return account
+            return None
+        row = self.db.query(AffiliateUser).filter(
+            AffiliateUser.device_id == device_id,
+            AffiliateUser.registered.is_(True),
+        ).one_or_none()
+        return self._row(row) if row else None
+
     def get(self, user_id: str, include_private: bool = False) -> dict[str, Any] | None:
         if self.redis: value = self.db._get(self._key("user:" + user_id))
         else:
