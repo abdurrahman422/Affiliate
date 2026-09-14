@@ -11,6 +11,7 @@ import androidx.compose.ui.test.performTextInput
 import com.ownerlink.agent.affiliate.TaskField
 import com.ownerlink.agent.ui.DynamicField
 import com.ownerlink.agent.ui.AffiliateSettings
+import com.ownerlink.agent.ui.AffiliateAuth
 import com.ownerlink.agent.ui.theme.PrivatChatTheme
 import com.ownerlink.agent.ui.theme.ThemeMode
 import org.junit.Rule
@@ -64,5 +65,25 @@ class AffiliateUiTest {
             compose.onNodeWithContentDescription("Dashboard QR Code").assertExists()
             compose.onNodeWithText("Copy Dashboard Code").performClick()
         }
+    }
+
+    @Test fun registrationAndLoginFlowsExposeRequiredStages() {
+        keepVisible()
+        compose.setContent { PrivatChatTheme(ThemeMode.LIGHT) { AffiliateAuth() } }
+        compose.onNodeWithText("Welcome to Affiliate").assertExists()
+        compose.onNodeWithText("Login").performClick()
+        compose.onNodeWithText("Phone Number").assertExists()
+        compose.onNodeWithText("Password").assertExists()
+        compose.onNodeWithText("← Back").performClick()
+        compose.onNodeWithText("Create Account").performClick()
+        compose.onNodeWithText("Personal Information").assertExists()
+        compose.onNodeWithText("Full Name").assertExists()
+        compose.onNodeWithText("Continue").performClick()
+        compose.onNodeWithText("Profile").assertExists()
+        compose.onNodeWithText("Choose Profile Photo").assertExists()
+        compose.onNodeWithText("Continue").performClick()
+        compose.onNodeWithText("Withdrawal Information").assertExists()
+        compose.onNodeWithText("bKash").assertExists()
+        compose.onNodeWithText("Nagad").assertExists()
     }
 }

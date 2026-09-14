@@ -16,7 +16,7 @@ class UserDataFile(context: Context) {
     private val prohibited = Regex("(?i)(password|passwd|passcode|2fa|totp|otp|recovery.?code|cookie|session.?token|private.?key|dashboard.?token|secret)")
 
     @Synchronized
-    fun rebuild(tasks: List<AffiliateTaskEntity>, submissions: List<AffiliateSubmissionEntity>, ledger: List<AffiliateLedgerEntity>) {
+    fun rebuild(tasks: List<AffiliateTaskEntity>, submissions: List<AffiliateSubmissionEntity>, ledger: List<AffiliateLedgerEntity>, profileJson: String? = null) {
         directory.mkdirs()
         val taskNames = tasks.associate { it.taskId to it.title }
         val credits = ledger.filter { it.taskId != null }.groupBy { it.taskId }
@@ -24,6 +24,15 @@ class UserDataFile(context: Context) {
             appendLine("Affiliate local work record")
             appendLine("Updated: ${DateFormat.getDateTimeInstance().format(Date())}")
             appendLine("This file stays on this phone and is never part of automatic task sync.")
+            val profile = profileJson?.let { runCatching { com.ownerlink.agent.network.Protocol.json.parseToJsonElement(it).jsonObject }.getOrNull() }
+            profile?.let {
+                appendLine("Name: ${safe(it["full_name"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("User ID: ${safe(it["user_id"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("Age: ${safe(it["age"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("Education: ${safe(it["education"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("Account created: ${safe(it["created_at"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("Withdrawal: ${safe(it["withdrawal_method"]?.jsonPrimitive?.content ?: "")} ${safe(it["withdrawal_number_masked"]?.jsonPrimitive?.content ?: "")}")
+            }
             submissions.sortedBy { it.createdAt }.forEach { submission ->
                 appendLine("==================================================")
                 appendLine("Task: ${safe(taskNames[submission.taskId] ?: submission.taskTitle)}")

@@ -2,6 +2,7 @@ package com.ownerlink.agent
 
 import androidx.test.core.app.ApplicationProvider
 import androidx.test.ext.junit.runners.AndroidJUnit4
+import androidx.test.platform.app.InstrumentationRegistry
 import com.ownerlink.agent.affiliate.AffiliateLedgerEntity
 import com.ownerlink.agent.affiliate.AffiliateStore
 import com.ownerlink.agent.affiliate.AffiliateSubmissionEntity
@@ -18,6 +19,16 @@ import org.junit.runner.RunWith
 
 @RunWith(AndroidJUnit4::class)
 class AffiliateDataTest {
+    @Test fun affiliateSessionAndProfilePersistEncrypted() {
+        val store = SecureStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        val oldToken = store.affiliateAuthToken; val oldProfile = store.affiliateProfileJson
+        store.affiliateAuthToken = "test-session-value"
+        store.affiliateProfileJson = "{\"user_id\":\"user-test\"}"
+        val restored = SecureStore(InstrumentationRegistry.getInstrumentation().targetContext)
+        assertEquals("test-session-value", restored.affiliateAuthToken)
+        assertEquals("{\"user_id\":\"user-test\"}", restored.affiliateProfileJson)
+        store.affiliateAuthToken = oldToken; store.affiliateProfileJson = oldProfile
+    }
     @Test fun roomCacheSupportsOfflineTasksQueueWalletAndLocalTxtRedaction() {
         val context = ApplicationProvider.getApplicationContext<android.content.Context>()
         context.deleteDatabase("affiliate-room.db")

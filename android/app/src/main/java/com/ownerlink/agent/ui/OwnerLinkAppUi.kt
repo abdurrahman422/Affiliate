@@ -97,6 +97,7 @@ import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import com.google.mlkit.vision.barcode.common.Barcode
 import com.ownerlink.agent.OwnerLinkApp
+import com.ownerlink.agent.affiliate.AffiliateAuthState
 import com.ownerlink.agent.BuildConfig
 import com.ownerlink.agent.R
 import com.ownerlink.agent.chat.ChatMessage
@@ -124,10 +125,15 @@ private enum class Tab { Chats, People, Settings }
 @Composable
 fun OwnerLinkAppUi() {
     val app = OwnerLinkApp.instance
-    var onboarded by remember { mutableStateOf(app.store.onboardingComplete) }
+    val auth by app.affiliateAccount.state.collectAsState()
     LaunchedEffect(Unit) { ConnectionService.start(app) }
     Surface(Modifier.fillMaxSize().safeDrawingPadding(), color = MaterialTheme.colorScheme.background) {
-        if (onboarded) AffiliateHome() else Onboarding { app.store.onboardingComplete = true; onboarded = true }
+        when (val state = auth) {
+            AffiliateAuthState.Checking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator() }
+            AffiliateAuthState.SignedOut -> AffiliateAuth()
+            is AffiliateAuthState.CompleteAccount -> AffiliateAuth(state.legacyName)
+            is AffiliateAuthState.SignedIn -> AffiliateHome()
+        }
     }
 }
 

@@ -1,7 +1,7 @@
 from collections.abc import Generator
 from pathlib import Path
 
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.engine import Engine
 from sqlalchemy.orm import Session, sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -49,6 +49,21 @@ def make_engine(database_url: str) -> Engine:
 
 def init_db(engine: Engine) -> None:
     Base.metadata.create_all(bind=engine)
+    # Lightweight additive migration for installations created before Affiliate accounts.
+    if engine.url.drivername.startswith("sqlite"):
+        existing = {column["name"] for column in inspect(engine).get_columns("affiliate_users")}
+        additions = {
+            "phone_number": "VARCHAR(20)", "password_hash": "TEXT", "age": "INTEGER",
+            "education": "VARCHAR(80)", "address": "TEXT", "site_address": "TEXT",
+            "withdrawal_method": "VARCHAR(16)", "withdrawal_number": "VARCHAR(20)",
+            "profile_photo_data": "TEXT", "profile_photo_mime": "VARCHAR(64)",
+            "registered": "BOOLEAN NOT NULL DEFAULT 0",
+        }
+        with engine.begin() as connection:
+            for name, declaration in additions.items():
+                if name not in existing:
+                    connection.execute(text(f"ALTER TABLE affiliate_users ADD COLUMN {name} {declaration}"))
+            connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_affiliate_users_phone_number ON affiliate_users(phone_number)"))
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:

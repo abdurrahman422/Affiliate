@@ -53,6 +53,8 @@ import androidx.compose.material.icons.rounded.Edit
 import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Wallet
+import androidx.compose.material.icons.rounded.Logout
+import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -97,6 +99,8 @@ import androidx.compose.ui.unit.dp
 import com.ownerlink.agent.BuildConfig
 import com.ownerlink.agent.OwnerLinkApp
 import com.ownerlink.agent.affiliate.AffiliateSubmissionItem
+import com.ownerlink.agent.affiliate.AffiliateAuthState
+import com.ownerlink.agent.affiliate.AffiliateProfile
 import com.ownerlink.agent.affiliate.AffiliateTaskItem
 import com.ownerlink.agent.affiliate.DynamicTaskValidator
 import com.ownerlink.agent.affiliate.AffiliatePresentationRules
@@ -346,21 +350,25 @@ internal fun AffiliateSettings() {
     val clipboard = LocalClipboardManager.current
     val appearance by app.appearance.collectAsState()
     var showDashboard by remember { mutableStateOf(false) }
+    var showProfile by remember { mutableStateOf(false) }
     var editProfile by remember { mutableStateOf(false) }
     var profileName by remember { mutableStateOf(app.store.friendlyName.ifBlank { "Affiliate user" }) }
     var dashboardGeneration by remember { mutableStateOf(0) }
     val haptic = LocalHapticFeedback.current
     var callLogEnabled by remember { mutableStateOf(Permissions.hasCallLog(context)) }
     val callLogPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { callLogEnabled = it }
+    val accountState by app.affiliateAccount.state.collectAsState()
+    val accountProfile = (accountState as? AffiliateAuthState.SignedIn)?.profile
     val avatar by produceState<android.graphics.Bitmap?>(null, app.store.profileUri) {
         value = withContext(Dispatchers.IO) { runCatching { app.store.profileUri?.let { context.contentResolver.openInputStream(Uri.parse(it))?.use(BitmapFactory::decodeStream) } }.getOrNull() }
     }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri ->
         if (uri != null) runCatching { context.contentResolver.openOutputStream(uri)?.use(app.affiliate.localData::exportTo) }.onSuccess { haptic.performHapticFeedback(HapticFeedbackType.LongPress); Toast.makeText(context, "Affiliate data exported", Toast.LENGTH_SHORT).show() }.onFailure { Toast.makeText(context, "Unable to export data", Toast.LENGTH_SHORT).show() }
     }
+    if (showProfile && accountProfile != null) { AffiliateProfileScreen(accountProfile) { showProfile = false }; return }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         AffiliateHeader("Settings", "Personal, private, and uncomplicated")
-        SettingsTitle("Profile"); PremiumCard(Modifier.fillMaxWidth()) { Row(verticalAlignment = Alignment.CenterVertically) {
+        SettingsTitle("Profile"); PremiumCard(Modifier.fillMaxWidth().clickable { showProfile = true }) { Row(verticalAlignment = Alignment.CenterVertically) {
             if (avatar != null) Image(avatar!!.asImageBitmap(), "Profile avatar", Modifier.size(58.dp).clip(CircleShape)) else Box(Modifier.size(58.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Text(profileName.take(1).uppercase(), style = MaterialTheme.typography.headlineMedium) }
             Spacer(Modifier.size(14.dp)); Column(Modifier.weight(1f)) { Text(profileName, style = MaterialTheme.typography.titleLarge); Text("Your Affiliate profile", color = MaterialTheme.colorScheme.onSurfaceVariant) }; IconButton(onClick = { editProfile = true }) { Icon(Icons.Rounded.Edit, "Change Name") }
         } }
@@ -373,12 +381,36 @@ internal fun AffiliateSettings() {
             PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Call Log", style = MaterialTheme.typography.titleMedium); Text(if (callLogEnabled) "Call Log access is enabled." else "Call Log access is not enabled on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant); if (!callLogEnabled) OutlinedButton(onClick = { callLogPermission.launch(Manifest.permission.READ_CALL_LOG) }) { Text("Enable Call Log Access") } } }
         }
         SettingsTitle("App Information"); PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Affiliate", style = MaterialTheme.typography.titleLarge); Text("Software Version  ${BuildConfig.VERSION_NAME}"); Text("Build Number  ${BuildConfig.VERSION_CODE}") } }
+        SettingsTitle("Account"); SettingsRow(Icons.Rounded.Logout, "Logout", "Sign out securely on this phone") { app.affiliateAccount.logout() }
         Spacer(Modifier.height(24.dp))
     }
     if (editProfile) {
         var name by remember { mutableStateOf(app.store.friendlyName) }
-        AlertDialog(onDismissRequest = { editProfile = false }, title = { Text("Change Name") }, text = { OutlinedTextField(name, { name = it.take(80) }, label = { Text("Name") }, singleLine = true) }, confirmButton = { Button(enabled = name.trim().isNotEmpty(), onClick = { profileName = name.trim(); app.store.friendlyName = profileName; editProfile = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { editProfile = false }) { Text("Cancel") } })
+        AlertDialog(onDismissRequest = { editProfile = false }, title = { Text("Change Name") }, text = { OutlinedTextField(name, { name = it.take(80) }, label = { Text("Name") }, singleLine = true) }, confirmButton = { Button(enabled = name.trim().length >= 2, onClick = { profileName = name.trim(); app.store.friendlyName = profileName; app.affiliateAccount.update(buildJsonObject { put("full_name", profileName) }); editProfile = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { editProfile = false }) { Text("Cancel") } })
     }
+}
+
+@Composable
+private fun AffiliateProfileScreen(profile: AffiliateProfile, back: () -> Unit) {
+    val app = OwnerLinkApp.instance; val context = LocalContext.current; val scope = rememberCoroutineScope()
+    var edit by remember { mutableStateOf(false) }
+    val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
+        val encoded = withContext(Dispatchers.IO) { compressProfilePhoto(context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)) }
+        encoded?.let { app.affiliateAccount.update(buildJsonObject { put("profile_photo_base64", it); put("profile_photo_mime", "image/jpeg") }) }
+    } }
+    LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item { Row(Modifier.padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }; Text("Profile", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) } }
+        item { PremiumCard(Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Box(Modifier.size(82.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(42.dp)) }; Text(profile.fullName, style = MaterialTheme.typography.headlineSmall); Text(profile.phoneNumber); OutlinedButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) { Text("Change Profile Photo") } } } }
+        item { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { ProfileLine("Age", profile.age.toString()); ProfileLine("Education", profile.education); ProfileLine("Address", profile.address); ProfileLine("Site Address", profile.siteAddress); ProfileLine("Withdrawal Method", profile.withdrawalMethod); ProfileLine("Withdrawal Number", profile.withdrawalNumberMasked); Button(onClick = { edit = true }, Modifier.fillMaxWidth()) { Text("Edit Profile") } } } }
+    }
+    if (edit) ProfileEditDialog(profile, { edit = false }) { body -> app.affiliateAccount.update(body); edit = false }
+}
+
+@Composable private fun ProfileLine(label: String, value: String) { Column { Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value) } }
+
+@Composable private fun ProfileEditDialog(profile: AffiliateProfile, close: () -> Unit, save: (JsonObject) -> Unit) {
+    var name by remember { mutableStateOf(profile.fullName) }; var age by remember { mutableStateOf(profile.age.toString()) }; var education by remember { mutableStateOf(profile.education) }; var address by remember { mutableStateOf(profile.address) }; var site by remember { mutableStateOf(profile.siteAddress) }; var method by remember { mutableStateOf(profile.withdrawalMethod) }; var number by remember { mutableStateOf("") }
+    AlertDialog(onDismissRequest = close, title = { Text("Edit Profile") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { OutlinedTextField(name, { name = it }, label = { Text("Full Name") }); OutlinedTextField(age, { age = it.filter(Char::isDigit) }, label = { Text("Age") }); Text("Education"); Row { listOf("SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other").forEach { if (it == education) AssistChip({}, { Text(it) }) } }; OutlinedTextField(education, { education = it }, label = { Text("Qualification") }); OutlinedTextField(address, { address = it }, label = { Text("Address") }); OutlinedTextField(site, { site = it }, label = { Text("Site Address") }); Row { listOf("bKash", "Nagad").forEach { option -> AssistChip(onClick = { method = option }, label = { Text(option) }, leadingIcon = if (method == option) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } }; OutlinedTextField(number, { number = it }, label = { Text("New $method Number (optional)") }) } }, confirmButton = { Button(onClick = { save(buildJsonObject { put("full_name", name); put("age", age.toIntOrNull() ?: profile.age); put("education", education); put("address", address); put("site_address", site); put("withdrawal_method", method); if (number.isNotBlank()) put("withdrawal_number", number) }) }) { Text("Save") } }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }
 
 @Composable private fun SettingsTitle(value: String) { HorizontalDivider(); Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp)) }

@@ -21,11 +21,12 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 4
-        versionName = "2.1.0-affiliate"
+        versionCode = 5
+        versionName = "2.2.0-affiliate"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
+        buildConfigField("String", "AFFILIATE_SERVER_URL", "\"https://ownerlink-affiliate.onrender.com\"")
     }
 
     signingConfigs {
@@ -39,13 +40,18 @@ android {
 
     buildTypes {
         debug {
+            buildConfigField("String", "AFFILIATE_SERVER_URL", "\"http://127.0.0.1:8000\"")
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
             buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             manifestPlaceholders["usesCleartext"] = "true"
         }
         release {
-            isMinifyEnabled = true
-            isShrinkResources = true
+            buildConfigField("String", "AFFILIATE_SERVER_URL", "\"https://ownerlink-affiliate.onrender.com\"")
+            // WebRTC's native JNI bootstrap crashes on Android 12 when this
+            // dependency is rewritten by R8. Keep the signed release unminified
+            // until the WebRTC artifact can be upgraded and validated separately.
+            isMinifyEnabled = false
+            isShrinkResources = false
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
             buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
             if (externalSigningFile.isFile) signingConfig = signingConfigs.getByName("privatChatRelease")

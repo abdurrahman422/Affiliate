@@ -823,7 +823,8 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
     @staticmethod
     def _user(row: AffiliateUser) -> dict[str, Any]:
         return {"user_id": row.user_id, "display_name": row.display_name, "device_id": row.device_id, "status": row.status,
-                "balance_milli": row.balance_milli, "quality_score": row.quality_score, "created_at": _dt(row.created_at), "updated_at": _dt(row.updated_at)}
+                "balance_milli": row.balance_milli, "quality_score": row.quality_score, "registered": row.registered,
+                "created_at": _dt(row.created_at), "updated_at": _dt(row.updated_at)}
 
     @staticmethod
     def _ledger(row: AffiliateCoinLedger) -> dict[str, Any]:

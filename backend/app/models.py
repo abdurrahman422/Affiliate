@@ -42,12 +42,34 @@ class AffiliateUser(Base):
 
     user_id: Mapped[str] = mapped_column(String(128), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(128), nullable=False)
-    device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True)
+    device_id: Mapped[str] = mapped_column(String(64), nullable=False, index=True, default="")
+    phone_number: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
+    password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
+    age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    education: Mapped[str | None] = mapped_column(String(80), nullable=True)
+    address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    site_address: Mapped[str | None] = mapped_column(Text, nullable=True)
+    withdrawal_method: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    withdrawal_number: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    profile_photo_data: Mapped[str | None] = mapped_column(Text, nullable=True)
+    profile_photo_mime: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    registered: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="ACTIVE")
     balance_milli: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     quality_score: Mapped[int] = mapped_column(Integer, nullable=False, default=100)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
+
+
+class AffiliateSession(Base):
+    __tablename__ = "affiliate_sessions"
+
+    session_id: Mapped[str] = mapped_column(String(36), primary_key=True)
+    user_id: Mapped[str] = mapped_column(String(128), nullable=False, index=True)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, nullable=False, index=True)
+    revoked: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 
 class AffiliateCampaign(Base):

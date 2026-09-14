@@ -17,7 +17,7 @@ from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 
 from fastapi import FastAPI, Form, HTTPException, Request, WebSocket, WebSocketDisconnect, status
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse, StreamingResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from sqlalchemy.orm import Session
@@ -36,6 +36,7 @@ from .auth import (
     require_csrf,
 )
 from .affiliate import AffiliateError, AffiliateService, coins_to_milli
+from .affiliate_accounts import AffiliateAccountService
 from .bootstrap import bootstrap_owner, validate_runtime_settings
 from .config import Settings, get_settings
 from .db import init_db, make_engine, session_factory
@@ -152,6 +153,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     def db_session() -> Session:
         return SessionLocal()
+
+    def bearer(request: Request) -> str:
+        header = request.headers.get("authorization", "")
+        return header[7:].strip() if header.lower().startswith("bearer ") else ""
+
+    def affiliate_user(request: Request):
+        db = db_session()
+        try: user = AffiliateAccountService(db, settings.SESSION_MAX_AGE).authenticate(bearer(request))
+        finally: db.close()
+        return user
 
     def ctx(request: Request, extra: dict | None = None) -> dict:
         data = {"request": request, "csrf_token": ensure_csrf(request), "owner_name": None}
@@ -296,6 +307,35 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally:
             db.close()
         return page(request, "devices.html", {"devices": cards})
+
+    @app.get("/users", response_class=HTMLResponse)
+    async def users_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try:
+            accounts = AffiliateAccountService(db, settings.SESSION_MAX_AGE).users()
+            service = AffiliateService(db)
+            for account in accounts:
+                submissions = service.submissions(user_id=account["user_id"])
+                account["task_count"] = len(submissions)
+                account["approved_count"] = sum(item["status"] == "APPROVED" for item in submissions)
+        finally: db.close()
+        return page(request, "users.html", {"users": accounts})
+
+    @app.get("/users/{user_id}", response_class=HTMLResponse)
+    async def user_page(request: Request, user_id: str):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try:
+            account = next((row for row in AffiliateAccountService(db, settings.SESSION_MAX_AGE).users() if row["user_id"] == user_id), None)
+            if account:
+                account["submissions"] = AffiliateService(db).submissions(user_id=user_id, limit=100)
+                account["ledger"] = AffiliateService(db).ledger(user_id=user_id, limit=100)
+        finally: db.close()
+        if not account: return page(request, "error.html", {"message": "User not found."}, 404)
+        return page(request, "user.html", {"user": account})
 
     @app.get("/campaigns", response_class=HTMLResponse)
     async def campaigns_page(request: Request):
@@ -481,6 +521,72 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         return page(request, "screen.html", {"device": card})
 
     # ----- JSON API -----
+    @app.post("/api/auth/register")
+    async def affiliate_register(request: Request):
+        body = await _safe_json(request)
+        if body is None: return json_error("Expected a JSON object", "BAD_REQUEST", 400)
+        db = db_session()
+        try:
+            profile, token = AffiliateAccountService(db, settings.SESSION_MAX_AGE).register(body, str(body.get("device_id") or "")[:64])
+            return {"ok": True, "user_id": profile["user_id"], "profile": profile, "token": token}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.post("/api/auth/login")
+    async def affiliate_login(request: Request):
+        body = await _safe_json(request)
+        if body is None: return json_error("Expected a JSON object", "BAD_REQUEST", 400)
+        db = db_session()
+        try:
+            profile, token = AffiliateAccountService(db, settings.SESSION_MAX_AGE).login(body.get("phone_number"), body.get("password"))
+            return {"ok": True, "user_id": profile["user_id"], "profile": profile, "token": token}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/auth/session")
+    async def affiliate_session(request: Request):
+        user = affiliate_user(request)
+        return {"ok": True, "profile": AffiliateAccountService.public(user)} if user else json_error("Authentication required", "AUTH_REQUIRED", 401)
+
+    @app.post("/api/auth/logout")
+    async def affiliate_logout(request: Request):
+        token = bearer(request)
+        if not affiliate_user(request): return json_error("Authentication required", "AUTH_REQUIRED", 401)
+        db = db_session()
+        try: AffiliateAccountService(db, settings.SESSION_MAX_AGE).logout(token)
+        finally: db.close()
+        return {"ok": True}
+
+    @app.get("/api/profile")
+    async def affiliate_profile(request: Request):
+        user = affiliate_user(request)
+        return {"ok": True, "profile": AffiliateAccountService.public(user)} if user else json_error("Authentication required", "AUTH_REQUIRED", 401)
+
+    @app.put("/api/profile")
+    async def affiliate_profile_update(request: Request):
+        user = affiliate_user(request)
+        if not user: return json_error("Authentication required", "AUTH_REQUIRED", 401)
+        body = await _safe_json(request)
+        if body is None: return json_error("Expected a JSON object", "BAD_REQUEST", 400)
+        db = db_session()
+        try: return {"ok": True, "profile": AffiliateAccountService(db, settings.SESSION_MAX_AGE).update(user["user_id"], body)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.get("/api/users/{user_id}/photo")
+    async def affiliate_photo(request: Request, user_id: str):
+        viewer = affiliate_user(request)
+        owner = None
+        db = db_session()
+        try:
+            if not viewer: owner = current_owner(request, db)
+            if not viewer and not owner: return json_error("Authentication required", "AUTH_REQUIRED", 401)
+            if viewer and viewer["user_id"] != user_id: return json_error("Access denied", "FORBIDDEN", 403)
+            value = AffiliateAccountService(db, settings.SESSION_MAX_AGE).get(user_id, include_private=True)
+        finally: db.close()
+        if not value or not value.get("profile_photo_data"): return Response(status_code=404)
+        return Response(base64.b64decode(value["profile_photo_data"]), media_type=value.get("profile_photo_mime") or "image/jpeg", headers={"Cache-Control": "private, max-age=300"})
+
     async def affiliate_admin_body(request: Request) -> tuple[Owner | JSONResponse, dict[str, Any] | None]:
         auth = require_api_owner(request)
         if isinstance(auth, JSONResponse):
@@ -1322,7 +1428,9 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
             cursor = 0
         db = SessionLocal()
         try:
-            sync = AffiliateService(db).sync(link.contact_id, link.device_id, link.contact_name or "Affiliate worker", cursor)
+            account = AffiliateAccountService(db).authenticate(str(payload.get("auth_token") or ""))
+            user_id = account["user_id"] if account else link.contact_id
+            sync = AffiliateService(db).sync(user_id, link.device_id, account.get("display_name", "Affiliate worker") if account else link.contact_name or "Affiliate worker", cursor)
             await websocket.send_json(P.envelope(P.TASK_SYNC, link.device_id, sync, data.get("request_id")))
         finally:
             db.close()
@@ -1341,9 +1449,11 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
             return
         db = SessionLocal()
         try:
+            account = AffiliateAccountService(db).authenticate(str(payload.get("auth_token") or ""))
+            user_id = account["user_id"] if account else link.contact_id
             submission = AffiliateService(db).submit(
                 str(payload.get("task_id") or ""), str(payload.get("client_submission_id") or ""),
-                link.contact_id, link.device_id, payload.get("fields") or {},
+                user_id, link.device_id, payload.get("fields") or {},
             )
             await websocket.send_json(P.envelope(P.TASK_SUBMISSION_ACK, link.device_id, {"submission": submission}, data.get("request_id")))
         except AffiliateError as exc:

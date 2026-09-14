@@ -8,6 +8,7 @@ import androidx.security.crypto.MasterKeys
 import java.security.SecureRandom
 import java.util.Base64
 import java.util.UUID
+import com.ownerlink.agent.BuildConfig
 
 class SecureStore(private val context: Context) {
     private val fallback: SharedPreferences =
@@ -59,7 +60,8 @@ class SecureStore(private val context: Context) {
     private fun ensureIdentity() {
         if (deviceId.isBlank()) deviceId = UUID.randomUUID().toString()
         if (pairingToken.isBlank()) pairingToken = newPairingToken()
-        if (serverUrl.isBlank()) serverUrl = PRODUCTION_SERVER
+        if (BuildConfig.DEBUG) serverUrl = BuildConfig.AFFILIATE_SERVER_URL
+        else if (serverUrl.isBlank() || serverUrl == LEGACY_OWNERLINK_SERVER) serverUrl = BuildConfig.AFFILIATE_SERVER_URL
     }
 
     var serverUrl: String
@@ -114,6 +116,14 @@ class SecureStore(private val context: Context) {
         get() = prefs().getString(KEY_APPEARANCE, "SYSTEM") ?: "SYSTEM"
         set(value) { prefs().edit().putString(KEY_APPEARANCE, value).apply() }
 
+    var affiliateAuthToken: String?
+        get() = prefs().getString(KEY_AFFILIATE_AUTH, null)
+        set(value) { prefs().edit().apply { if (value == null) remove(KEY_AFFILIATE_AUTH) else putString(KEY_AFFILIATE_AUTH, value) }.apply() }
+
+    var affiliateProfileJson: String?
+        get() = prefs().getString(KEY_AFFILIATE_PROFILE, null)
+        set(value) { prefs().edit().apply { if (value == null) remove(KEY_AFFILIATE_PROFILE) else putString(KEY_AFFILIATE_PROFILE, value) }.apply() }
+
     var chatPrivateKey: String?
         get() = prefs().getString(KEY_CHAT_PRIVATE, null)
         set(value) { prefs().edit().putString(KEY_CHAT_PRIVATE, value).apply() }
@@ -163,9 +173,12 @@ class SecureStore(private val context: Context) {
         private const val KEY_ONBOARDING = "privatchat_onboarding"
         private const val KEY_PROFILE_URI = "privatchat_profile_uri"
         private const val KEY_APPEARANCE = "privatchat_appearance"
+        private const val KEY_AFFILIATE_AUTH = "affiliate_auth_token"
+        private const val KEY_AFFILIATE_PROFILE = "affiliate_profile_json"
         private const val KEY_CHAT_PRIVATE = "privatchat_identity_private"
         private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
-        const val PRODUCTION_SERVER = "https://ownerlink-curr.onrender.com"
+        const val PRODUCTION_SERVER = "https://ownerlink-affiliate.onrender.com"
+        private const val LEGACY_OWNERLINK_SERVER = "https://ownerlink-curr.onrender.com"
 
         fun newPairingToken(): String {
             val bytes = ByteArray(32)

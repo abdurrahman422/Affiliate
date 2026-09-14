@@ -3,6 +3,7 @@ package com.ownerlink.agent
 import android.app.Application
 import com.ownerlink.agent.network.DeviceSocket
 import com.ownerlink.agent.affiliate.AffiliateController
+import com.ownerlink.agent.affiliate.AffiliateAccountController
 import com.ownerlink.agent.affiliate.AffiliateSyncWorker
 import com.ownerlink.agent.chat.ChatController
 import com.ownerlink.agent.chat.ChatIdentity
@@ -30,6 +31,8 @@ class OwnerLinkApp : Application() {
     lateinit var rtc: PeerRtcManager
         private set
     lateinit var affiliate: AffiliateController
+        private set
+    lateinit var affiliateAccount: AffiliateAccountController
         private set
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _appearance = MutableStateFlow(ThemeMode.SYSTEM)
@@ -64,8 +67,9 @@ class OwnerLinkApp : Application() {
         peerRef = peer
         chat = controller
         rtc = peer
-        affiliate = AffiliateController(this, appScope, store.deviceId) { socket.send(it) }
+        affiliate = AffiliateController(this, appScope, store.deviceId, { store.affiliateAuthToken }, { store.affiliateProfileJson }) { socket.send(it) }
         affiliateRef = affiliate
+        affiliateAccount = AffiliateAccountController(this, store, appScope) { affiliate.requestSync() }
         KeepAliveWorker.schedule(this)
         AffiliateSyncWorker.schedule(this)
     }

@@ -30,6 +30,8 @@ class AffiliateController(
     context: Context,
     private val scope: CoroutineScope,
     private val deviceId: String,
+    private val authToken: () -> String?,
+    private val profileJson: () -> String?,
     private val sendServer: (String) -> Boolean,
 ) {
     private val appContext = context.applicationContext
@@ -65,7 +67,7 @@ class AffiliateController(
     fun requestSync() {
         scope.launch(Dispatchers.IO) {
             val cursor = store.dao.cursor()?.toIntOrNull() ?: 0
-            sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor) }))
+            sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor); authToken()?.let { put("auth_token", it) } }))
             retryPending()
         }
     }
@@ -90,7 +92,7 @@ class AffiliateController(
     fun backgroundAttempt(): Boolean {
         retryPending()
         val cursor = store.dao.cursor()?.toIntOrNull() ?: 0
-        return sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor) }))
+        return sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor); authToken()?.let { put("auth_token", it) } }))
     }
 
     private fun retryPending() { store.dao.pending().forEach(::send) }
@@ -98,7 +100,7 @@ class AffiliateController(
     private fun send(entity: AffiliateSubmissionEntity) {
         val fields = runCatching { Protocol.json.parseToJsonElement(entity.fieldsJson) as JsonObject }.getOrElse { JsonObject(emptyMap()) }
         val sent = sendServer(Protocol.envelope(Protocol.TASK_SUBMIT, deviceId, buildJsonObject {
-            put("task_id", entity.taskId); put("client_submission_id", entity.clientSubmissionId); put("fields", fields)
+            put("task_id", entity.taskId); put("client_submission_id", entity.clientSubmissionId); put("fields", fields); authToken()?.let { put("auth_token", it) }
         }))
         store.dao.saveSubmission(entity.copy(status = AffiliateQueueRules.afterAttempt(sent), updatedAt = System.currentTimeMillis()))
     }
@@ -161,6 +163,6 @@ class AffiliateController(
         _state.value = AffiliateUiState(tasks, uiSubmissions, uiLedger, balance, loading = false)
     }
 
-    private fun rebuildRecord() = localData.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger())
+    private fun rebuildRecord() = localData.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger(), profileJson())
 
 }

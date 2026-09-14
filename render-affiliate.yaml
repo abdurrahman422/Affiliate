@@ -1,8 +1,8 @@
-# Preview-only blueprint. It intentionally creates a separate service and does
+# Separate Affiliate production blueprint. It intentionally creates a separate service and does
 # not replace the stable ownerlink production service defined in render.yaml.
 services:
   - type: web
-    name: ownerlink-affiliate-preview
+    name: ownerlink-affiliate
     runtime: docker
     plan: free
     branch: Affiliate
