@@ -6,6 +6,6 @@ Affiliate accounts are separate from dashboard device identity. Existing install
 
 SQLite development installs add Affiliate tables with SQLAlchemy `create_all`; existing tables are not deleted or rewritten. Android uses a separate `affiliate-room.db`, so the established chat database remains untouched. Production Redis data is namespaced below `ownerlink:v1:affiliate:*`; no media, proof bytes, or local text record is mirrored into Redis.
 
-The `Affiliate` branch must be deployed as a separate preview service. Do not merge it into `main` or point the stable service at this branch without a separate release decision. `render-affiliate.yaml` is a preview blueprint with automatic deployment disabled.
+The standalone `abdurrahman422/Affiliate` repository must be deployed as a separate service from its `main` branch. Do not point the stable OwnerLink service at this repository. `render-affiliate.yaml` keeps automatic deployment disabled until the separate production environment is configured.
 
 Release builds reuse the existing external signing configuration. Back up the signing key; losing it prevents future in-place updates.

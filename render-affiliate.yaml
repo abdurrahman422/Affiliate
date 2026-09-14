@@ -5,7 +5,8 @@ services:
     name: ownerlink-affiliate
     runtime: docker
     plan: free
-    branch: Affiliate
+    # The standalone abdurrahman422/Affiliate repository publishes this code on main.
+    branch: main
     autoDeploy: false
     numInstances: 1
     dockerContext: ./backend
@@ -17,7 +18,7 @@ services:
       - key: STORAGE_BACKEND
         value: redis
       - key: OWNERLINK_BASE_URL
-        sync: false
+        value: https://ownerlink-affiliate.onrender.com
       - key: OWNERLINK_SECRET_KEY
         generateValue: true
       - key: OWNERLINK_ADMIN_USERNAME
@@ -30,10 +31,6 @@ services:
         sync: false
       - key: STUN_URLS
         value: stun:stun.l.google.com:19302
-      - key: TURN_URLS
-        sync: false
-      - key: TURN_SHARED_SECRET
-        sync: false
       - key: TURN_REALM
         value: affiliate
       - key: TURN_CREDENTIAL_TTL
