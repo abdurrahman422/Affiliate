@@ -50,7 +50,9 @@ def validate_registration(raw: dict[str, Any], require_photo: bool = True) -> di
     if education not in EDUCATION: raise AffiliateError("Choose a valid educational qualification", "INVALID_EDUCATION")
     address, site = str(raw.get("address") or "").strip(), normalize_site_address(raw.get("site_address"))
     if not 3 <= len(address) <= 500: raise AffiliateError("Address is required", "INVALID_ADDRESS")
-    if not 2 <= len(site) <= 300: raise AffiliateError("Site address is required", "INVALID_SITE_ADDRESS")
+    # Site address is optional. The Android onboarding no longer asks normal users
+    # for a server/site URL because the production endpoint is app-configured.
+    if len(site) > 300: raise AffiliateError("Site address is too long", "INVALID_SITE_ADDRESS")
     method = str(raw.get("withdrawal_method") or "").strip()
     if method not in WITHDRAWAL: raise AffiliateError("Choose bKash or Nagad", "INVALID_WITHDRAWAL_METHOD")
     withdrawal = normalize_bd_phone(raw.get("withdrawal_number"))
