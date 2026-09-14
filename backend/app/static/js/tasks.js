@@ -1,6 +1,10 @@
 (function () {
   const form = document.getElementById("task-form");
   const builder = document.getElementById("field-builder");
+  const taskType = document.getElementById("task-type");
+  const formFields = document.getElementById("form-task-fields");
+  const addField = document.getElementById("add-field");
+  const urlOptions = [...document.querySelectorAll(".url-task-option")];
   const types = ["short_text", "long_text", "url", "number", "dropdown", "multi_select", "checkbox", "datetime", "image", "file", "note"];
   document.getElementById("category-form")?.addEventListener("submit", async (event) => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
@@ -32,7 +36,18 @@
     const order = document.createElement("span"); order.className = "field-order"; order.append(up, down);
     row.append(id, label, type, requiredLabel, choices, minimum, maximum, help, order, remove); builder.appendChild(row);
   }
-  document.getElementById("add-field")?.addEventListener("click", () => fieldRow());
+  addField?.addEventListener("click", () => fieldRow());
+  function syncTaskType() {
+    const isUrl = taskType?.value === "URL";
+    urlOptions.forEach((item) => { item.hidden = !isUrl; });
+    if (formFields) formFields.hidden = isUrl;
+    if (addField) addField.hidden = isUrl;
+    const url = form?.elements.action_url;
+    const duration = form?.elements.action_duration_seconds;
+    if (url) url.required = isUrl;
+    if (duration) duration.required = isUrl;
+  }
+  taskType?.addEventListener("change", syncTaskType);
   const templateSelect = document.getElementById("template");
   templateSelect?.addEventListener("change", () => {
     const template = (window.AFFILIATE_TEMPLATES || []).find((item) => item.template_id === templateSelect.value);
@@ -53,7 +68,7 @@
       return value;
     });
     const eligibilityType = fd.get("eligibility_type");
-    const body = { title: fd.get("title"), category_id: fd.get("category_id"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), priority: fd.get("priority"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
+    const body = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), action_url: fd.get("action_url"), action_duration_seconds: fd.get("action_duration_seconds"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), priority: fd.get("priority"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: taskType?.value === "URL" ? [] : fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
     try { await OwnerLink.api("/api/tasks", { method: "POST", body }); window.location.reload(); }
     catch (error) { out.textContent = error.message; }
   });
@@ -62,4 +77,5 @@
     try { await OwnerLink.api(`/api/tasks/${card.dataset.taskId}/status`, { method: "POST", body: { status: button.dataset.status } }); window.location.reload(); }
     catch (error) { alert(error.message); }
   }));
+  syncTaskType();
 })();

@@ -114,7 +114,7 @@ class AffiliateController(
                 val task = AffiliateJson.task(value)
                 AffiliateTaskEntity(task.taskId, task.categoryId, task.title, task.description, task.instructions, task.reward,
                     task.status, task.priority, task.deadline, (value["field_schema"] ?: JsonArray(emptyList())).toString(),
-                    value["revision"]?.jsonPrimitive?.intOrNull ?: 0)
+                    value["revision"]?.jsonPrimitive?.intOrNull ?: 0, task.taskType, task.actionUrl, task.actionDurationSeconds)
             }
             if (payload["full"]?.jsonPrimitive?.contentOrNull == "true") store.dao.clearTasks()
             store.dao.saveTasks(entities)
@@ -157,6 +157,7 @@ class AffiliateController(
         val tasks = taskEntities.map { entity -> AffiliateJson.task(buildJsonObject {
             put("task_id", entity.taskId); put("category_id", entity.categoryId); put("title", entity.title); put("description", entity.description)
             put("instructions", entity.instructions); put("reward", entity.reward); put("status", entity.status); put("priority", entity.priority)
+            put("task_type", entity.taskType); entity.actionUrl?.let { put("action_url", it) }; put("action_duration_seconds", entity.actionDurationSeconds)
             if (entity.deadline != null) put("end_at", entity.deadline); put("field_schema", Protocol.json.parseToJsonElement(entity.schemaJson))
         }) }
         val uiSubmissions = submissions.map { AffiliateSubmissionItem(it.submissionId, it.clientSubmissionId, it.taskId, it.status, it.fieldsJson, it.createdAt, it.updatedAt, it.reviewReason) }

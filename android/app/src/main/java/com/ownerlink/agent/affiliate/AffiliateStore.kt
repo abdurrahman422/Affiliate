@@ -11,6 +11,8 @@ import androidx.room.PrimaryKey
 import androidx.room.Query
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 
 @Entity(tableName = "affiliate_tasks", indices = [Index("status"), Index("categoryId"), Index("priority")])
 data class AffiliateTaskEntity(
@@ -25,6 +27,9 @@ data class AffiliateTaskEntity(
     val deadline: String?,
     val schemaJson: String,
     val revision: Int,
+    val taskType: String = "FORM",
+    val actionUrl: String? = null,
+    val actionDurationSeconds: Int = 0,
     val updatedAt: Long = System.currentTimeMillis(),
 )
 
@@ -72,9 +77,20 @@ interface AffiliateDao {
     @Query("DELETE FROM affiliate_ledger") fun clearLedger()
 }
 
-@Database(entities = [AffiliateTaskEntity::class, AffiliateSubmissionEntity::class, AffiliateLedgerEntity::class, AffiliateSyncEntity::class], version = 1, exportSchema = true)
+@Database(entities = [AffiliateTaskEntity::class, AffiliateSubmissionEntity::class, AffiliateLedgerEntity::class, AffiliateSyncEntity::class], version = 2, exportSchema = true)
 abstract class AffiliateDatabase : RoomDatabase() { abstract fun dao(): AffiliateDao }
 
 class AffiliateStore(context: Context) {
-    val dao: AffiliateDao = Room.databaseBuilder(context.applicationContext, AffiliateDatabase::class.java, "affiliate-room.db").build().dao()
+    val dao: AffiliateDao = Room.databaseBuilder(context.applicationContext, AffiliateDatabase::class.java, "affiliate-room.db")
+        .addMigrations(MIGRATION_1_2).build().dao()
+
+    companion object {
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE affiliate_tasks ADD COLUMN taskType TEXT NOT NULL DEFAULT 'FORM'")
+                db.execSQL("ALTER TABLE affiliate_tasks ADD COLUMN actionUrl TEXT")
+                db.execSQL("ALTER TABLE affiliate_tasks ADD COLUMN actionDurationSeconds INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+    }
 }

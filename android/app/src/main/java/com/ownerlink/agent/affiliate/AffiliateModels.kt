@@ -40,6 +40,9 @@ data class AffiliateTaskItem(
     val priority: Int,
     val deadline: String?,
     val fields: List<TaskField>,
+    val taskType: String = "FORM",
+    val actionUrl: String? = null,
+    val actionDurationSeconds: Int = 0,
 )
 
 data class AffiliateCategoryItem(val categoryId: String, val name: String)
@@ -144,6 +147,9 @@ object AffiliateJson {
         status = value.text("status"), priority = value["priority"]?.jsonPrimitive?.intOrNull ?: 0,
         deadline = value["end_at"]?.jsonPrimitive?.contentOrNull,
         fields = (value["field_schema"] as? JsonArray)?.mapNotNull { runCatching { field(it.jsonObject) }.getOrNull() }.orEmpty(),
+        taskType = value.text("task_type", "FORM"),
+        actionUrl = value["action_url"]?.jsonPrimitive?.contentOrNull,
+        actionDurationSeconds = value["action_duration_seconds"]?.jsonPrimitive?.intOrNull ?: 0,
     )
 
     fun field(value: JsonObject) = TaskField(

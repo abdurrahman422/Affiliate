@@ -34,6 +34,7 @@ from .storage import RedisStore
 
 
 TASK_STATES = {"DRAFT", "PUBLISHED", "PAUSED", "CLOSED", "ARCHIVED"}
+TASK_TYPES = {"FORM", "URL"}
 SUBMISSION_STATES = {"IN_PROGRESS", "SUBMITTED", "PENDING_REVIEW", "APPROVED", "REJECTED", "REVISION_REQUESTED"}
 FIELD_TYPES = {"short_text", "long_text", "url", "number", "dropdown", "multi_select", "checkbox", "datetime", "image", "file", "note"}
 PROHIBITED = {
@@ -79,6 +80,25 @@ def _safe_label(value: Any, field: str, limit: int, required: bool = False) -> s
 def _contains_prohibited(text: str) -> bool:
     normalized = re.sub(r"[_\-]+", " ", text.lower())
     return any(term in normalized for term in PROHIBITED)
+
+
+def normalize_task_action(raw: dict[str, Any]) -> tuple[str, str | None, int]:
+    task_type = str(raw.get("task_type") or "FORM").strip().upper()
+    if task_type not in TASK_TYPES:
+        raise AffiliateError("Choose Form task or URL task", "INVALID_TASK_TYPE")
+    if task_type == "FORM":
+        return task_type, None, 0
+    action_url = str(raw.get("action_url") or "").strip()
+    parsed = urlparse(action_url)
+    if parsed.scheme not in {"http", "https"} or not parsed.netloc or len(action_url) > 2048:
+        raise AffiliateError("URL tasks require a valid public HTTP(S) link", "INVALID_ACTION_URL")
+    try:
+        duration = int(raw.get("action_duration_seconds") or 0)
+    except (TypeError, ValueError):
+        raise AffiliateError("Watch duration must be a whole number of seconds", "INVALID_ACTION_DURATION")
+    if duration < 5 or duration > 86400:
+        raise AffiliateError("Watch duration must be between 5 seconds and 24 hours", "INVALID_ACTION_DURATION")
+    return task_type, action_url, duration
 
 
 def validate_field_schema(raw: Any) -> list[dict[str, Any]]:
@@ -473,6 +493,7 @@ class AffiliateService:
         repeat_limit = max(1, min(1000, int(raw.get("repeat_limit") or 1)))
         max_submissions = raw.get("max_submissions")
         max_submissions = max(1, int(max_submissions)) if max_submissions not in (None, "") else None
+        task_type, action_url, action_duration_seconds = normalize_task_action(raw)
         category_id = _safe_label(raw.get("category_id"), "Category", 64, True)
         campaign_id, template_id = raw.get("campaign_id") or None, raw.get("template_id") or None
         if category_id not in {row["category_id"] for row in self.categories() if row.get("enabled", True)}: raise AffiliateError("Category is not enabled", "INVALID_CATEGORY")
@@ -482,6 +503,7 @@ class AffiliateService:
             "category_id": category_id,
             "title": _safe_label(raw.get("title"), "Task title", 200, True), "description": _safe_label(raw.get("description"), "Description", 5000),
             "instructions": _safe_label(raw.get("instructions"), "Instructions", 10000, True), "reward": milli_to_coins(reward), "status": "DRAFT",
+            "task_type": task_type, "action_url": action_url, "action_duration_seconds": action_duration_seconds,
             "priority": max(0, min(100, int(raw.get("priority") or 0))), "start_at": raw.get("start_at") or None, "end_at": raw.get("end_at") or None,
             "eligibility": normalize_eligibility(raw.get("eligibility")), "repeat_limit": repeat_limit, "max_submissions": max_submissions,
             "field_schema": fields, "verification_mode": "MANUAL", "created_by": actor, "revision": revision, "created_at": stamp, "updated_at": stamp}
@@ -490,6 +512,7 @@ class AffiliateService:
         else:
             self.db.add(AffiliateTask(task_id=task_id, campaign_id=value["campaign_id"], template_id=value["template_id"], category_id=value["category_id"],
                 title=value["title"], description=value["description"], instructions=value["instructions"], reward_milli=reward, status="DRAFT",
+                task_type=task_type, action_url=action_url, action_duration_seconds=action_duration_seconds,
                 priority=value["priority"], start_at=value["start_at"], end_at=value["end_at"], eligibility_json=json.dumps(value["eligibility"]),
                 repeat_limit=repeat_limit, max_submissions=max_submissions, field_schema_json=json.dumps(fields), verification_mode="MANUAL", created_by=actor, revision=revision))  # type: ignore[union-attr]
             self._audit("TASK_CREATED", "task", task_id, actor); self.db.commit()  # type: ignore[union-attr]
@@ -516,6 +539,9 @@ class AffiliateService:
         if "title" in raw: value["title"] = _safe_label(raw.get("title"), "Task title", 200, True)
         if "description" in raw: value["description"] = _safe_label(raw.get("description"), "Description", 5000)
         if "instructions" in raw: value["instructions"] = _safe_label(raw.get("instructions"), "Instructions", 10000, True)
+        if any(key in raw for key in ("task_type", "action_url", "action_duration_seconds")):
+            merged = {**value, **raw}
+            value["task_type"], value["action_url"], value["action_duration_seconds"] = normalize_task_action(merged)
         if "reward" in raw:
             reward = coins_to_milli(raw["reward"])
             if reward < 0: raise AffiliateError("Task reward cannot be negative", "INVALID_REWARD")
@@ -528,6 +554,7 @@ class AffiliateService:
         else:
             row = self.db.get(AffiliateTask, task_id)  # type: ignore[union-attr]
             row.title, row.description, row.instructions = value["title"], value["description"], value["instructions"]
+            row.task_type, row.action_url, row.action_duration_seconds = value.get("task_type", "FORM"), value.get("action_url"), int(value.get("action_duration_seconds", 0))
             row.reward_milli, row.field_schema_json, row.eligibility_json = coins_to_milli(value["reward"]), json.dumps(value["field_schema"]), json.dumps(value["eligibility"])
             row.priority, row.revision, row.updated_at = value["priority"], value["revision"], utcnow()
         self._audit("TASK_UPDATED", "task", task_id, actor); self._commit(); return value
@@ -833,6 +860,7 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
     def _task(row: AffiliateTask) -> dict[str, Any]:
         return {"task_id": row.task_id, "campaign_id": row.campaign_id, "template_id": row.template_id, "category_id": row.category_id,
                 "title": row.title, "description": row.description, "instructions": row.instructions, "reward": milli_to_coins(row.reward_milli),
+                "task_type": row.task_type or "FORM", "action_url": row.action_url, "action_duration_seconds": row.action_duration_seconds or 0,
                 "status": row.status, "priority": row.priority, "start_at": row.start_at, "end_at": row.end_at,
                 "eligibility": json.loads(row.eligibility_json), "repeat_limit": row.repeat_limit, "max_submissions": row.max_submissions,
                 "field_schema": json.loads(row.field_schema_json), "verification_mode": row.verification_mode, "created_by": row.created_by,

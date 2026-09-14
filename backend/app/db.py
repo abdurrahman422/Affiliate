@@ -68,6 +68,16 @@ def init_db(engine: Engine) -> None:
         if "enabled" not in category_columns:
             with engine.begin() as connection:
                 connection.execute(text("ALTER TABLE affiliate_categories ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT 1"))
+        task_columns = {column["name"] for column in inspect(engine).get_columns("affiliate_tasks")}
+        task_additions = {
+            "task_type": "VARCHAR(16) NOT NULL DEFAULT 'FORM'",
+            "action_url": "TEXT",
+            "action_duration_seconds": "INTEGER NOT NULL DEFAULT 0",
+        }
+        with engine.begin() as connection:
+            for name, declaration in task_additions.items():
+                if name not in task_columns:
+                    connection.execute(text(f"ALTER TABLE affiliate_tasks ADD COLUMN {name} {declaration}"))
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:
