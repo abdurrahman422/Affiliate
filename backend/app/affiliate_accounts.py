@@ -23,7 +23,7 @@ WITHDRAWAL = {"bKash", "Nagad"}
 
 def normalize_site_address(value: Any) -> str:
     raw = str(value or "").strip()
-    if not raw: raise AffiliateError("Site address is required", "INVALID_SITE_ADDRESS")
+    if not raw: return ""
     without_scheme = re.sub(r"^https?://", "", raw, flags=re.IGNORECASE).lstrip("/")
     parsed = urlsplit("https://" + without_scheme)
     if not parsed.hostname or "." not in parsed.hostname or parsed.username or parsed.password:
@@ -162,7 +162,7 @@ class AffiliateAccountService:
         for field, limit in (("address", 500), ("site_address", 300)):
             if field in raw:
                 value = str(raw[field]).strip()
-                if len(value) < 2: raise AffiliateError(f"{field.replace('_', ' ').title()} is required", "INVALID_PROFILE")
+                if field == "address" and len(value) < 2: raise AffiliateError("Address is required", "INVALID_PROFILE")
                 patch[field] = normalize_site_address(value) if field == "site_address" else value[:limit]
         if "withdrawal_number" in raw: patch["withdrawal_number"] = normalize_bd_phone(raw["withdrawal_number"])
         if raw.get("profile_photo_base64"):

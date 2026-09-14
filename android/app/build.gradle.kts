@@ -24,8 +24,8 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 8
-        versionName = "2.3.2-affiliate"
+        versionCode = 9
+        versionName = "2.3.3-affiliate"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
