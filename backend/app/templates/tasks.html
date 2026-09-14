@@ -2,6 +2,8 @@
 {% block title %}Tasks — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Tasks</h1><p class="muted">Build schema-driven work once and publish it to every eligible device.</p></div></div>
+<section class="card form-card"><div class="section-head"><div><h2>Import Task JSON</h2><p class="muted">Upload one validated JSON file to create its category and task automatically.</p></div><a class="button" href="/static/examples/affiliate-task-import.example.json" download>Download demo JSON</a></div>
+<form id="task-import-form" class="inline-fields"><label>JSON file<input id="task-json-file" type="file" accept="application/json,.json" required></label><button class="primary" type="submit">Import JSON</button><span id="task-import-result" class="meta" role="status"></span></form></section>
 <section class="card form-card"><div class="section-head"><div><h2>Categories</h2><p class="muted">Android receives enabled categories dynamically.</p></div></div>
 <form id="category-form" class="inline-fields"><label>Name<input name="name" maxlength="80" required></label><label>Description<input name="description" maxlength="2000"></label><button class="primary" type="submit">Create Category</button></form>
 <div class="card-list">{% for c in categories %}<article class="card" data-category-id="{{ c.category_id }}"><div class="row"><div><strong class="category-name">{{ c.name }}</strong><p class="muted category-description">{{ c.description }}</p></div><span class="pill">{{ 'Enabled' if c.enabled else 'Disabled' }}</span></div><div class="actions"><button type="button" data-category-action="edit">Edit</button><button type="button" data-category-action="toggle">{{ 'Disable' if c.enabled else 'Enable' }}</button><button type="button" class="danger" data-category-action="delete">Delete</button></div></article>{% endfor %}</div></section>
@@ -15,9 +17,7 @@
   <label class="wide">Description<textarea name="description" maxlength="5000" rows="2"></textarea></label>
   <label class="wide">Instructions<textarea name="instructions" maxlength="10000" rows="4" required></textarea></label>
   <label class="wide url-task-option" hidden>Destination link<input name="action_url" type="url" maxlength="2048" placeholder="https://www.youtube.com/watch?v=..."></label>
-  <label class="url-task-option" hidden>Required time (seconds)<input name="action_duration_seconds" type="number" min="5" max="86400" value="120"></label>
   <label>Reward coins<input name="reward" type="number" min="0" step="0.001" value="0.50" required></label>
-  <label>Priority<input name="priority" type="number" min="0" max="100" value="0"></label>
   <label>Per-device repeat limit<input name="repeat_limit" type="number" min="1" max="1000" value="1"></label>
   <label>Total submission limit<input name="max_submissions" type="number" min="1" placeholder="Unlimited"></label>
   <fieldset class="wide"><legend>Eligibility</legend><div class="inline-fields"><label>Target<select name="eligibility_type"><option value="all">All active devices</option><option value="devices">Selected devices</option><option value="users">Selected users</option><option value="groups">Device groups</option></select></label><label>IDs, comma separated<input name="eligibility_ids" placeholder="Only for selected targets"></label><label>Minimum quality score<input name="minimum_quality_score" type="number" min="0" max="100"></label></div></fieldset>
@@ -28,7 +28,7 @@
 <div class="card-list">{% for item in tasks %}<article class="card" data-task-id="{{ item.task_id }}">
   <div class="row"><div><p class="eyebrow">{{ item.category_id }} · {{ item.task_type|default('FORM') }} · {{ item.reward }} coin</p><h2>{{ item.title }}</h2><p class="muted">{{ item.description }}</p></div><span class="pill status-{{ item.status|lower }}">{{ item.status }}</span></div>
   <p>{{ item.instructions }}</p><p class="meta">{{ item.field_schema|length }} fields · repeat {{ item.repeat_limit }}{% if item.max_submissions %} · {{ item.max_submissions }} total{% endif %}</p>
-  <div class="actions lifecycle">{% for state in ['PUBLISHED','PAUSED','CLOSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}" {% if item.status == 'ARCHIVED' %}disabled{% endif %}>{{ state|title }}</button>{% endfor %}</div>
+  <div class="actions lifecycle"><button type="button" data-task-action="edit" {% if item.status in ['CLOSED','ARCHIVED'] %}disabled{% endif %}>Edit</button>{% for state in ['PUBLISHED','PAUSED','CLOSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}" {% if item.status == 'ARCHIVED' %}disabled{% endif %}>{{ state|title }}</button>{% endfor %}<button type="button" class="danger" data-task-action="delete">Delete</button></div>
 </article>{% endfor %}</div>
 {% endblock %}
-{% block scripts %}<script>window.AFFILIATE_TEMPLATES={{ task_templates|tojson }};window.AFFILIATE_CATEGORIES={{ categories|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}
+{% block scripts %}<script>window.AFFILIATE_TEMPLATES={{ task_templates|tojson }};window.AFFILIATE_CATEGORIES={{ categories|tojson }};window.AFFILIATE_TASKS={{ tasks|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}

@@ -745,6 +745,43 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
         finally: db.close()
 
+    @app.post("/api/tasks/import")
+    async def api_import_task(request: Request):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        if not isinstance(body, dict) or int(body.get("version") or 0) != 1:
+            return json_error("Task JSON version must be 1", "INVALID_IMPORT")
+        category_raw, task_raw = body.get("category"), body.get("task")
+        if not isinstance(category_raw, dict) or not isinstance(task_raw, dict):
+            return json_error("Task JSON requires category and task objects", "INVALID_IMPORT")
+        db = db_session()
+        created_category = None
+        try:
+            service = AffiliateService(db)
+            category_name = str(category_raw.get("name") or "").strip()
+            category = next((item for item in service.categories() if item["name"].casefold() == category_name.casefold()), None)
+            if category is None:
+                category = service.create_category(category_raw, auth.username)
+                created_category = category["category_id"]
+            payload = dict(task_raw)
+            payload["category_id"] = category["category_id"]
+            payload["field_schema"] = payload.pop("response_fields", payload.get("field_schema") or [])
+            payload.pop("priority", None)
+            payload.pop("action_duration_seconds", None)
+            publish = bool(payload.pop("publish", False)) or str(payload.pop("status", "")).upper() == "PUBLISHED"
+            value = service.create_task(payload, auth.username)
+            if publish:
+                value = service.task_status(value["task_id"], "PUBLISHED", auth.username)
+        except (AffiliateError, TypeError, ValueError) as exc:
+            if created_category:
+                try: AffiliateService(db).delete_category(created_category, auth.username)
+                except Exception: pass
+            if isinstance(exc, AffiliateError): return json_error(exc.message, exc.code, exc.status_code)
+            return json_error("Task JSON contains invalid values", "INVALID_IMPORT")
+        finally: db.close()
+        await broadcast_task_event(P.TASK_PUBLISHED if value["status"] == "PUBLISHED" else P.TASK_UPDATED, value)
+        return {"ok": True, "task": value, "category": category}
+
     @app.put("/api/tasks/{task_id}")
     async def api_update_task(request: Request, task_id: str):
         auth, body = await affiliate_admin_body(request)
@@ -755,6 +792,17 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         finally: db.close()
         await broadcast_task_event(P.TASK_UPDATED, value)
         return {"ok": True, "task": value}
+
+    @app.delete("/api/tasks/{task_id}")
+    async def api_delete_task(request: Request, task_id: str):
+        auth, _body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: AffiliateService(db).delete_task(task_id, auth.username)
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+        await broadcast_task_event(P.TASK_UPDATED, {"task_id": task_id, "status": "DELETED", "revision": 0})
+        return {"ok": True}
 
     @app.post("/api/tasks/{task_id}/status")
     async def api_task_status(request: Request, task_id: str):

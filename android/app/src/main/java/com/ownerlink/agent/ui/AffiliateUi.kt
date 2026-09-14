@@ -59,7 +59,6 @@ import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayCircle
-import androidx.compose.material.icons.rounded.Timer
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material3.AlertDialog
@@ -124,7 +123,6 @@ import com.ownerlink.agent.util.Permissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -231,7 +229,6 @@ private fun TaskCard(task: AffiliateTaskItem, submission: AffiliateSubmissionIte
             }
             Text(task.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
             Text(task.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3)
-            if (task.taskType == "URL" && task.actionDurationSeconds > 0) Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Timer, null, Modifier.size(18.dp)); Spacer(Modifier.width(6.dp)); Text("Required time · ${formatDuration(task.actionDurationSeconds)}", style = MaterialTheme.typography.bodySmall) }
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { AssistChip(onClick = {}, label = { Text((submission?.status ?: task.status).replace('_', ' ')) }); Spacer(Modifier.weight(1f)); Button(onClick = { open(task) }, enabled = enabled) { Text(if (task.taskType == "URL") "Start task" else "View task") } }
         }
     }
@@ -246,13 +243,7 @@ private fun AffiliateTaskDetail(task: AffiliateTaskItem, back: () -> Unit) {
     val errors = remember(task.taskId) { mutableStateMapOf<String, String>() }
     var review by remember { mutableStateOf(false) }
     var actionStartedAt by rememberSaveable(task.taskId) { mutableStateOf<Long?>(null) }
-    var now by remember { mutableStateOf(System.currentTimeMillis()) }
-    val requiredMillis = task.actionDurationSeconds.coerceAtLeast(0) * 1000L
-    val remainingMillis = actionStartedAt?.let { (requiredMillis - (now - it)).coerceAtLeast(0) } ?: requiredMillis
-    val actionComplete = task.taskType != "URL" || (actionStartedAt != null && remainingMillis == 0L)
-    androidx.compose.runtime.LaunchedEffect(actionStartedAt, remainingMillis) {
-        if (actionStartedAt != null && remainingMillis > 0) { delay(1000); now = System.currentTimeMillis() }
-    }
+    val actionComplete = task.taskType != "URL" || actionStartedAt != null
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }; Column { Text(task.categoryId.replaceFirstChar(Char::uppercase), color = MaterialTheme.colorScheme.primary); Text(task.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) } }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("Reward"); Text("${task.reward} coin", fontWeight = FontWeight.Bold) } }
@@ -261,15 +252,15 @@ private fun AffiliateTaskDetail(task: AffiliateTaskItem, back: () -> Unit) {
         if (task.taskType == "URL") Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) { Text("3", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(10.dp)); Text("Open and complete", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-                Text("Open the assigned link, stay for ${formatDuration(task.actionDurationSeconds)}, then return here to complete the task.")
+                Text("Open the assigned link, complete the requested action, then return here to submit your response.")
                 Button(onClick = {
-                    task.actionUrl?.let { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onSuccess { if (actionStartedAt == null) { actionStartedAt = System.currentTimeMillis(); now = System.currentTimeMillis() } }.onFailure { Toast.makeText(context, "Unable to open this link", Toast.LENGTH_SHORT).show() } }
+                    task.actionUrl?.let { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onSuccess { if (actionStartedAt == null) actionStartedAt = System.currentTimeMillis() }.onFailure { Toast.makeText(context, "Unable to open this link", Toast.LENGTH_SHORT).show() } }
                 }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Rounded.OpenInNew, null); Spacer(Modifier.width(8.dp)); Text(if (actionStartedAt == null) "Open task link" else "Open link again") }
-                AnimatedContent(remainingMillis, label = "task-countdown") { remaining -> Text(if (actionStartedAt == null) "Timer starts when you open the link" else if (remaining > 0) "Return after ${formatDuration(((remaining + 999) / 1000).toInt())}" else "Required time completed ✓", color = if (remaining == 0L && actionStartedAt != null) Color(0xFF2E9E68) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold) }
+                AnimatedContent(actionStartedAt != null, label = "task-link-state") { opened -> Text(if (opened) "Link opened ✓" else "Open the link to continue", color = if (opened) Color(0xFF2E9E68) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold) }
             }
         }
         if (task.fields.isNotEmpty()) { HorizontalDivider(); Text(if (task.taskType == "URL") "Final response" else "3 · Your response", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); task.fields.forEach { field -> DynamicField(field, values[field.id], { values[field.id] = it; errors.remove(field.id) }, errors[field.id]) } }
-        Button(onClick = { errors.clear(); errors.putAll(DynamicTaskValidator.validate(task.fields, values)); if (errors.isEmpty() && actionComplete) review = true }, enabled = actionComplete, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (task.taskType == "URL" && !actionComplete) "Complete after ${formatDuration(((remainingMillis + 999) / 1000).toInt())}" else "Review and complete") }
+        Button(onClick = { errors.clear(); errors.putAll(DynamicTaskValidator.validate(task.fields, values)); if (errors.isEmpty() && actionComplete) review = true }, enabled = actionComplete, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (task.taskType == "URL" && !actionComplete) "Open link to continue" else "Review and complete") }
         Text("Only the answers and proof files you explicitly choose are submitted. Other phone files are never scanned.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (review) AlertDialog(onDismissRequest = { review = false }, title = { Text("Review before submitting") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(task.title, fontWeight = FontWeight.Bold); task.fields.filter { it.type != "note" && values[it.id] != null }.forEach { Text("${it.label}: ${displayValue(values[it.id])}") }; Text("After submission, this task will be Pending Review.") } }, confirmButton = { Button(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); app.affiliate.submit(task, valuesToJson(values)); review = false; back() }) { Text("Submit task") } }, dismissButton = { TextButton(onClick = { review = false }) { Text("Go back") } })
@@ -278,12 +269,6 @@ private fun AffiliateTaskDetail(task: AffiliateTaskItem, back: () -> Unit) {
 @Composable
 private fun TaskStepCard(number: String, title: String, detail: String, icon: androidx.compose.ui.graphics.vector.ImageVector) {
     PremiumCard(Modifier.fillMaxWidth()) { Row(verticalAlignment = Alignment.Top) { Box(Modifier.size(42.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(14.dp)), contentAlignment = Alignment.Center) { Icon(icon, null, tint = MaterialTheme.colorScheme.primary) }; Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text("$number · $title", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold); Text(detail, color = MaterialTheme.colorScheme.onSurfaceVariant) } } }
-}
-
-private fun formatDuration(seconds: Int): String = when {
-    seconds < 60 -> "$seconds sec"
-    seconds % 60 == 0 -> "${seconds / 60} min"
-    else -> "${seconds / 60} min ${seconds % 60} sec"
 }
 
 @Composable

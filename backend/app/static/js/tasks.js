@@ -5,6 +5,19 @@
   const formFields = document.getElementById("form-task-fields");
   const addField = document.getElementById("add-field");
   const urlOptions = [...document.querySelectorAll(".url-task-option")];
+  const importForm = document.getElementById("task-import-form");
+  importForm?.addEventListener("submit", async (event) => {
+    event.preventDefault();
+    const out = document.getElementById("task-import-result");
+    const file = document.getElementById("task-json-file")?.files?.[0];
+    if (!file) return;
+    if (file.size > 256 * 1024) { out.textContent = "JSON file must be under 256 KB."; return; }
+    try {
+      const payload = JSON.parse(await file.text());
+      await OwnerLink.api("/api/tasks/import", { method: "POST", body: payload });
+      window.location.reload();
+    } catch (error) { out.textContent = error instanceof SyntaxError ? "This is not valid JSON." : error.message; }
+  });
   const types = ["short_text", "long_text", "url", "number", "dropdown", "multi_select", "checkbox", "datetime", "image", "file", "note"];
   document.getElementById("category-form")?.addEventListener("submit", async (event) => {
     event.preventDefault(); const fd = new FormData(event.currentTarget);
@@ -43,9 +56,7 @@
     if (formFields) formFields.hidden = isUrl;
     if (addField) addField.hidden = isUrl;
     const url = form?.elements.action_url;
-    const duration = form?.elements.action_duration_seconds;
     if (url) url.required = isUrl;
-    if (duration) duration.required = isUrl;
   }
   taskType?.addEventListener("change", syncTaskType);
   const templateSelect = document.getElementById("template");
@@ -68,7 +79,7 @@
       return value;
     });
     const eligibilityType = fd.get("eligibility_type");
-    const body = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), action_url: fd.get("action_url"), action_duration_seconds: fd.get("action_duration_seconds"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), priority: fd.get("priority"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: taskType?.value === "URL" ? [] : fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
+    const body = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), action_url: fd.get("action_url"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: taskType?.value === "URL" ? [] : fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
     try { await OwnerLink.api("/api/tasks", { method: "POST", body }); window.location.reload(); }
     catch (error) { out.textContent = error.message; }
   });
@@ -76,6 +87,26 @@
     const card = button.closest("[data-task-id]");
     try { await OwnerLink.api(`/api/tasks/${card.dataset.taskId}/status`, { method: "POST", body: { status: button.dataset.status } }); window.location.reload(); }
     catch (error) { alert(error.message); }
+  }));
+  document.querySelectorAll("[data-task-id] [data-task-action]").forEach((button) => button.addEventListener("click", async () => {
+    const card = button.closest("[data-task-id]");
+    const task = (window.AFFILIATE_TASKS || []).find((item) => item.task_id === card.dataset.taskId);
+    if (!task) return;
+    try {
+      if (button.dataset.taskAction === "delete") {
+        if (!confirm("Delete this task? Tasks with submissions must be archived instead.")) return;
+        await OwnerLink.api(`/api/tasks/${encodeURIComponent(task.task_id)}`, { method: "DELETE", body: {} });
+      } else {
+        const title = prompt("Task name", task.title); if (!title) return;
+        const description = prompt("Description", task.description || ""); if (description === null) return;
+        const instructions = prompt("Instructions", task.instructions || ""); if (!instructions) return;
+        const reward = prompt("Reward coins", task.reward || "0"); if (reward === null) return;
+        const patch = { title, description, instructions, reward };
+        if ((task.task_type || "FORM") === "URL") { const actionUrl = prompt("Destination link", task.action_url || ""); if (!actionUrl) return; patch.action_url = actionUrl; patch.task_type = "URL"; }
+        await OwnerLink.api(`/api/tasks/${encodeURIComponent(task.task_id)}`, { method: "PUT", body: patch });
+      }
+      window.location.reload();
+    } catch (error) { alert(error.message); }
   }));
   syncTaskType();
 })();

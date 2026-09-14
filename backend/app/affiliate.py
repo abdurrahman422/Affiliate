@@ -92,13 +92,7 @@ def normalize_task_action(raw: dict[str, Any]) -> tuple[str, str | None, int]:
     parsed = urlparse(action_url)
     if parsed.scheme not in {"http", "https"} or not parsed.netloc or len(action_url) > 2048:
         raise AffiliateError("URL tasks require a valid public HTTP(S) link", "INVALID_ACTION_URL")
-    try:
-        duration = int(raw.get("action_duration_seconds") or 0)
-    except (TypeError, ValueError):
-        raise AffiliateError("Watch duration must be a whole number of seconds", "INVALID_ACTION_DURATION")
-    if duration < 5 or duration > 86400:
-        raise AffiliateError("Watch duration must be between 5 seconds and 24 hours", "INVALID_ACTION_DURATION")
-    return task_type, action_url, duration
+    return task_type, action_url, 0
 
 
 def validate_field_schema(raw: Any) -> list[dict[str, Any]]:
@@ -558,6 +552,20 @@ class AffiliateService:
             row.reward_milli, row.field_schema_json, row.eligibility_json = coins_to_milli(value["reward"]), json.dumps(value["field_schema"]), json.dumps(value["eligibility"])
             row.priority, row.revision, row.updated_at = value["priority"], value["revision"], utcnow()
         self._audit("TASK_UPDATED", "task", task_id, actor); self._commit(); return value
+
+    def delete_task(self, task_id: str, actor: str) -> None:
+        value = self.task(task_id)
+        if self.submissions(task_id=task_id, limit=1):
+            raise AffiliateError("Tasks with submissions cannot be deleted; archive it instead", "TASK_IN_USE", 409)
+        if self.redis:
+            self.db._cmd("DEL", self._key("task", task_id))  # type: ignore[attr-defined]
+            self.db._cmd("SREM", self._key("task:ids"), task_id)  # type: ignore[attr-defined]
+            self._next_version()
+        else:
+            row = self.db.get(AffiliateTask, task_id)  # type: ignore[union-attr]
+            if row: self.db.delete(row)  # type: ignore[union-attr]
+        self._audit("TASK_DELETED", "task", task_id, actor, {"title": value["title"]})
+        self._commit()
 
     def task_status(self, task_id: str, status: str, actor: str) -> dict[str, Any]:
         status = status.upper()

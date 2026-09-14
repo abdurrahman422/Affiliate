@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "category": {
+    "name": "Facebook Follow",
+    "description": "Public Facebook pages and profiles to follow. Never request passwords, OTPs, cookies, or private account access."
+  },
+  "task": {
+    "title": "Follow our official Facebook page",
+    "task_type": "URL",
+    "action_url": "https://www.facebook.com/example",
+    "description": "Open the official Facebook page and follow it from your own account.",
+    "instructions": "Tap Open task link, follow the public page, return to Affiliate, confirm completion, and attach a screenshot if requested.",
+    "reward": "0.5",
+    "repeat_limit": 1,
+    "max_submissions": 1000,
+    "publish": true,
+    "response_fields": [
+      {
+        "id": "follow_confirmed",
+        "type": "checkbox",
+        "label": "I followed the page",
+        "required": true
+      },
+      {
+        "id": "proof_screenshot",
+        "type": "image",
+        "label": "Follow screenshot",
+        "required": false,
+        "allowed_types": [
+          "image/jpeg",
+          "image/png",
+          "image/webp"
+        ],
+        "max_size_mb": 10,
+        "help_text": "Upload only the page view; crop or hide unrelated personal information."
+      }
+    ]
+  }
+}
