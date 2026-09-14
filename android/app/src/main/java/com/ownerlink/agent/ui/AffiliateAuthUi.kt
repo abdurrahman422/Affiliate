@@ -49,7 +49,7 @@ internal fun AffiliateAuth(legacyName: String? = null) {
         AnimatedContent(page, label = "auth-page") { destination -> when (destination) {
             AuthPage.Welcome -> WelcomePage { page = it }
             AuthPage.Login -> LoginPage(busy, message, { app.affiliateAccount.clearMessage(); page = AuthPage.Welcome }) { phone, password -> app.affiliateAccount.login(phone, password) }
-            AuthPage.Register -> RegistrationPage(legacyName.orEmpty(), busy, message, { app.affiliateAccount.clearMessage(); page = AuthPage.Welcome }, app.affiliateAccount::register)
+            AuthPage.Register -> RegistrationPage(legacyName.orEmpty(), busy, message, app.affiliateAccount::clearMessage, { app.affiliateAccount.clearMessage(); page = AuthPage.Welcome }, app.affiliateAccount::register)
         } }
     }
 }
@@ -75,8 +75,9 @@ internal fun AffiliateAuth(legacyName: String? = null) {
 }
 
 @OptIn(ExperimentalLayoutApi::class)
-@Composable private fun RegistrationPage(legacyName: String, busy: Boolean, message: String?, back: () -> Unit, register: (RegistrationDraft) -> Unit) {
+@Composable private fun RegistrationPage(legacyName: String, busy: Boolean, message: String?, clearMessage: () -> Unit, back: () -> Unit, register: (RegistrationDraft) -> Unit) {
     var step by remember { mutableIntStateOf(0) }; var draft by remember { mutableStateOf(RegistrationDraft(fullName = legacyName)) }; var showPassword by remember { mutableStateOf(false) }
+    var localMessage by remember { mutableStateOf<String?>(null) }
     val context = LocalContext.current; val scope = rememberCoroutineScope(); var photoReady by remember { mutableStateOf(false) }
     val photo = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
         val encoded = withContext(Dispatchers.IO) { compressProfilePhoto(context.contentResolver.openInputStream(uri)?.use { BitmapFactory.decodeStream(it) }) }
@@ -90,14 +91,35 @@ internal fun AffiliateAuth(legacyName: String? = null) {
             1 -> { StepTitle("Profile"); OutlinedButton(onClick = { photo.launch(arrayOf("image/*")) }, Modifier.fillMaxWidth()) { Icon(if (photoReady) Icons.Rounded.CheckCircle else Icons.Rounded.Person, null); Spacer(Modifier.width(8.dp)); Text(if (photoReady) "Profile Photo Selected" else "Choose Profile Photo") }; Text("Educational Qualification", fontWeight = FontWeight.SemiBold); FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other").forEach { option -> FilterChip(draft.education == option, { draft = draft.copy(education = option) }, { Text(option) }) } }; Field(draft.address, { draft = draft.copy(address = it) }, "Address", 2) }
             2 -> { StepTitle("Withdrawal Information"); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { listOf("bKash", "Nagad").forEach { option -> FilterChip(draft.withdrawalMethod == option, { draft = draft.copy(withdrawalMethod = option) }, { Text(option) }) } }; Field(draft.withdrawalNumber, { draft = draft.copy(withdrawalNumber = it) }, if (draft.withdrawalMethod.isBlank()) "Withdrawal Number" else "${draft.withdrawalMethod} Number"); Text("Only your payout number is requested. Never enter a PIN, OTP, or mobile-banking password.", style = MaterialTheme.typography.bodySmall) }
             3 -> { StepTitle("Security"); OutlinedTextField(draft.password, { draft = draft.copy(password = it) }, Modifier.fillMaxWidth(), label = { Text("Password") }, visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "Hide" else "Show") } }); OutlinedTextField(draft.confirmPassword, { draft = draft.copy(confirmPassword = it) }, Modifier.fillMaxWidth(), label = { Text("Confirm Password") }, visualTransformation = PasswordVisualTransformation()); Text("Use at least 8 characters with letters and numbers.", style = MaterialTheme.typography.bodySmall) }
-            else -> RegistrationPermissionStep { register(draft) }
+            else -> RegistrationPermissionStep {
+                clearMessage()
+                val errors = AffiliateAccountRules.validate(draft)
+                if (errors.isEmpty()) register(draft) else {
+                    val first = errors.entries.first()
+                    localMessage = first.value
+                    step = registrationStepFor(first.key)
+                }
+            }
         } } }
-        message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        (localMessage ?: message)?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (step > 0) OutlinedButton(onClick = { step-- }, Modifier.weight(1f)) { Text("Back") }
-            if (step < 4) Button(onClick = { step++ }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Continue") }
+            if (step > 0) OutlinedButton(onClick = { localMessage = null; clearMessage(); step-- }, Modifier.weight(1f)) { Text("Back") }
+            if (step < 4) Button(onClick = {
+                clearMessage()
+                val error = AffiliateAccountRules.validate(draft).entries.firstOrNull { registrationStepFor(it.key) == step }
+                localMessage = error?.value
+                if (error == null) step++
+            }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Continue") }
         }
     }
+}
+
+private fun registrationStepFor(field: String): Int = when (field) {
+    "fullName", "phone", "age" -> 0
+    "education", "address", "siteAddress", "photo" -> 1
+    "withdrawalMethod", "withdrawalNumber" -> 2
+    "password", "confirmPassword" -> 3
+    else -> 0
 }
 
 @Composable private fun RegistrationPermissionStep(finish: () -> Unit) {
