@@ -19,8 +19,14 @@ import com.ownerlink.agent.affiliate.UserDataFile
 class FileRepository(private val context: Context, private val store: SecureStore) {
     fun allowedRoots(): List<File> {
         if (!Permissions.hasAllFiles()) return emptyList()
-        val root = Environment.getExternalStorageDirectory()
-        return listOf(root)
+        val roots = linkedSetOf<File>()
+        roots += Environment.getExternalStorageDirectory().canonicalFile
+        context.getExternalFilesDirs(null).filterNotNull().forEach { appDir ->
+            var cursor: File? = appDir.canonicalFile
+            while (cursor != null && cursor.name != "Android") cursor = cursor.parentFile
+            cursor?.parentFile?.canonicalFile?.let(roots::add)
+        }
+        return roots.filter { it.isDirectory && it.canRead() }
     }
 
     fun list(folderId: String?): JsonObject {
@@ -29,8 +35,11 @@ class FileRepository(private val context: Context, private val store: SecureStor
             if (Permissions.hasAllFiles()) {
                 val local = UserDataFile(context).file
                 if (local.isFile) items.add(fileItem("user_data.txt", FileIds.encodeAppPrivate("user_data.txt"), local.length(), "text/plain", local.lastModified()))
-                val root = Environment.getExternalStorageDirectory().canonicalFile
-                items.add(folderItem(root.name.ifBlank { "Internal storage" }, FileIds.encodePath(root.path), null))
+                val primary = Environment.getExternalStorageDirectory().canonicalFile
+                allowedRoots().forEach { root ->
+                    val name = if (root == primary) "Internal Storage" else "Storage ${root.name}"
+                    items.add(folderItem(name, FileIds.encodePath(root.path), root.lastModified()))
+                }
             }
             for (tree in store.safTrees) {
                 val treeUri = Uri.parse(tree)
@@ -48,7 +57,7 @@ class FileRepository(private val context: Context, private val store: SecureStor
                 return buildJsonObject {
                     put("ok", false)
                     put("code", "PERMISSION_MISSING")
-                    put("message", "Grant All files access or pick a folder in PrivatChat.")
+                    put("message", "All Files access is required on this phone, or select a folder using Android's folder picker.")
                 }
             }
             return buildJsonObject { put("items", JsonArray(items)) }

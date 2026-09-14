@@ -2,6 +2,20 @@
   const form = document.getElementById("task-form");
   const builder = document.getElementById("field-builder");
   const types = ["short_text", "long_text", "url", "number", "dropdown", "multi_select", "checkbox", "datetime", "image", "file", "note"];
+  document.getElementById("category-form")?.addEventListener("submit", async (event) => {
+    event.preventDefault(); const fd = new FormData(event.currentTarget);
+    try { await OwnerLink.api("/api/categories", { method: "POST", body: Object.fromEntries(fd.entries()) }); window.location.reload(); }
+    catch (error) { alert(error.message); }
+  });
+  document.querySelectorAll("[data-category-id] [data-category-action]").forEach((button) => button.addEventListener("click", async () => {
+    const card = button.closest("[data-category-id]"); const id = card.dataset.categoryId; const current = (window.AFFILIATE_CATEGORIES || []).find((c) => c.category_id === id); const action = button.dataset.categoryAction;
+    try {
+      if (action === "edit") { const name = prompt("Category name", current.name); if (!name) return; const description = prompt("Description", current.description || ""); await OwnerLink.api(`/api/categories/${encodeURIComponent(id)}`, { method: "PUT", body: { name, description: description || "", enabled: current.enabled !== false } }); }
+      else if (action === "toggle") await OwnerLink.api(`/api/categories/${encodeURIComponent(id)}`, { method: "PUT", body: { enabled: current.enabled === false } });
+      else { if (!confirm("Delete this category? Only unreferenced categories can be deleted.")) return; await OwnerLink.api(`/api/categories/${encodeURIComponent(id)}`, { method: "DELETE", body: {} }); }
+      window.location.reload();
+    } catch (error) { alert(error.message); }
+  }));
   function fieldRow(value = {}) {
     const row = document.createElement("div"); row.className = "builder-row";
     const id = document.createElement("input"); id.placeholder = "field_id"; id.value = value.id || ""; id.setAttribute("aria-label", "Field identifier");

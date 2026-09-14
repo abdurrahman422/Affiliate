@@ -573,6 +573,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
         finally: db.close()
 
+    @app.post("/api/profile/password")
+    async def affiliate_password_change(request: Request):
+        user = affiliate_user(request)
+        if not user: return json_error("Authentication required", "AUTH_REQUIRED", 401)
+        body = await _safe_json(request)
+        if body is None: return json_error("Expected a JSON object", "BAD_REQUEST", 400)
+        db = db_session()
+        try:
+            AffiliateAccountService(db, settings.SESSION_MAX_AGE).change_password(
+                user["user_id"], body.get("current_password"), body.get("new_password"), body.get("confirm_password")
+            )
+            return {"ok": True}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
     @app.get("/api/users/{user_id}/photo")
     async def affiliate_photo(request: Request, user_id: str):
         viewer = affiliate_user(request)
@@ -625,6 +640,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if isinstance(auth, JSONResponse): return auth
         db = db_session()
         try: return {"ok": True, "category": AffiliateService(db).create_category(body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.put("/api/categories/{category_id}")
+    async def api_update_category(request: Request, category_id: str):
+        auth, body = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: return {"ok": True, "category": AffiliateService(db).update_category(category_id, body or {}, auth.username)}
+        except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
+        finally: db.close()
+
+    @app.delete("/api/categories/{category_id}")
+    async def api_delete_category(request: Request, category_id: str):
+        auth, _ = await affiliate_admin_body(request)
+        if isinstance(auth, JSONResponse): return auth
+        db = db_session()
+        try: AffiliateService(db).delete_category(category_id, auth.username); return {"ok": True}
         except AffiliateError as exc: return json_error(exc.message, exc.code, exc.status_code)
         finally: db.close()
 

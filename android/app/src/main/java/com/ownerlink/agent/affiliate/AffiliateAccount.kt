@@ -98,6 +98,11 @@ class AffiliateAccountController(
 
     fun update(body: JsonObject) = request("/api/profile", "PUT", body, true, false)
 
+    fun changePassword(current: String, password: String, confirm: String, success: () -> Unit) =
+        request("/api/profile/password", "POST", buildJsonObject {
+            put("current_password", current); put("new_password", password); put("confirm_password", confirm)
+        }, true, false, success)
+
     fun logout() {
         request("/api/auth/logout", "POST", JsonObject(emptyMap()), true, false) {
             store.affiliateAuthToken = null; store.affiliateProfileJson = null; _state.value = AffiliateAuthState.SignedOut

@@ -3,6 +3,7 @@
   const body = document.getElementById("file-body");
   const status = document.getElementById("files-status");
   const pathBar = document.getElementById("path-bar");
+  const parentButton = document.getElementById("files-parent");
   const stack = [{ id: null, name: "Storage" }];
 
   function downloadUrl(fileId) {
@@ -23,6 +24,7 @@
       });
       pathBar.appendChild(a);
     });
+    parentButton.hidden = stack.length <= 1;
   }
 
   async function load() {
@@ -41,6 +43,7 @@
         const nameTd = document.createElement("td");
         const typeTd = document.createElement("td");
         const sizeTd = document.createElement("td");
+        const modifiedTd = document.createElement("td");
         const actTd = document.createElement("td");
         if (item.directory) {
           const a = document.createElement("a");
@@ -63,13 +66,18 @@
           actTd.appendChild(a);
         }
         sizeTd.textContent = item.directory ? "" : OwnerLink.formatSize(item.size);
-        tr.append(nameTd, typeTd, sizeTd, actTd);
+        modifiedTd.textContent = item.modified ? new Date(item.modified).toLocaleString() : "—";
+        tr.append(nameTd, typeTd, sizeTd, modifiedTd, actTd);
         body.appendChild(tr);
       }
     } catch (err) {
       status.textContent = err.message;
     }
   }
+
+  parentButton.addEventListener("click", () => {
+    if (stack.length > 1) { stack.pop(); load(); }
+  });
 
   load();
 })();

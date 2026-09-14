@@ -42,6 +42,8 @@ data class AffiliateTaskItem(
     val fields: List<TaskField>,
 )
 
+data class AffiliateCategoryItem(val categoryId: String, val name: String)
+
 data class AffiliateSubmissionItem(
     val submissionId: String,
     val clientSubmissionId: String,
@@ -127,7 +129,8 @@ object AffiliatePresentationRules {
         val amount = amountText.toBigDecimalOrNull()
         val balance = balanceText.toBigDecimalOrNull() ?: java.math.BigDecimal.ZERO
         when {
-            amount == null || amount <= java.math.BigDecimal.ZERO -> errors["amount"] = "Enter an amount greater than 0"
+            amount == null -> errors["amount"] = "Enter a numeric coin amount"
+            amount < java.math.BigDecimal("1000") -> errors["amount"] = "Minimum send amount is 1000"
             amount > balance -> errors["amount"] = "Amount exceeds your current balance"
         }
         return errors

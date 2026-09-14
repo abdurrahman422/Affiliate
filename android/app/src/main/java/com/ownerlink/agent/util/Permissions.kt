@@ -16,6 +16,8 @@ import com.ownerlink.agent.accessibility.OwnerLinkAccessibilityService
 
 object Permissions {
     fun hasCallLog(context: Context): Boolean = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
+    fun hasCamera(context: Context): Boolean = ContextCompat.checkSelfPermission(context, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED
+    fun hasContacts(context: Context): Boolean = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) == PackageManager.PERMISSION_GRANTED
     fun hasNotifications(context: Context): Boolean {
         if (Build.VERSION.SDK_INT < 33) return true
         return ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==

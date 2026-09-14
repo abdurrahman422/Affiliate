@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -54,6 +55,7 @@ import androidx.compose.material.icons.rounded.QrCode2
 import androidx.compose.material.icons.rounded.Share
 import androidx.compose.material.icons.rounded.Wallet
 import androidx.compose.material.icons.rounded.Logout
+import androidx.compose.material.icons.rounded.Lock
 import androidx.compose.material.icons.rounded.Person
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
@@ -95,6 +97,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.ownerlink.agent.BuildConfig
 import com.ownerlink.agent.OwnerLinkApp
@@ -194,11 +197,11 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit) {
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { AffiliateHeader("Affiliate", if (socket in setOf(ConnectionState.Online, ConnectionState.WaitingForPair)) "Fresh opportunities, synced securely" else "Offline mode · cached tasks available") }
         item { GradientHeroCard("Your next opportunity", available.firstOrNull()?.title ?: "Stay ready", available.firstOrNull()?.let { "Earn ${it.reward} coin" } ?: "New tasks will appear automatically") }
-        if (rawAvailable.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(rawAvailable.map { it.categoryId }.distinct()) { value -> AssistChip(onClick = { category = value }, label = { Text(value.replaceFirstChar(Char::uppercase)) }, leadingIcon = if (category == value) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
+        if (state.categories.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(state.categories) { item -> AssistChip(onClick = { category = item.categoryId }, label = { Text(item.name) }, leadingIcon = if (category == item.categoryId) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
         if (state.loading) item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         if (!state.loading && state.tasks.isEmpty()) item { AffiliateEmpty("No tasks available", "Published tasks will appear here. Cached tasks remain visible offline.") }
         if (available.any { it.priority >= 10 }) { item { SectionLabel("Priority / Featured") }; items(available.filter { it.priority >= 10 }, key = { "featured-${it.taskId}" }) { TaskCard(it, null, open) } }
-        if (available.isNotEmpty()) { item { SectionLabel("Available") }; items(available, key = { "available-${it.taskId}" }) { TaskCard(it, null, open) } }
+        if (available.any { it.priority < 10 }) { item { SectionLabel("Available") }; items(available.filter { it.priority < 10 }, key = { "available-${it.taskId}" }) { TaskCard(it, null, open) } }
         if (progress.isNotEmpty()) { item { SectionLabel("In Progress") }; items(progress, key = { "progress-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
         if (pending.isNotEmpty()) { item { SectionLabel("Pending Review") }; items(pending, key = { "pending-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
         item { Spacer(Modifier.height(20.dp)) }
@@ -209,12 +212,14 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit) {
 
 @Composable
 private fun TaskCard(task: AffiliateTaskItem, submission: AffiliateSubmissionItem?, open: (AffiliateTaskItem) -> Unit) {
+    val categories = OwnerLinkApp.instance.affiliate.state.collectAsState().value.categories
+    val categoryName = categories.firstOrNull { it.categoryId == task.categoryId }?.name ?: task.categoryId
     PremiumCard(Modifier.fillMaxWidth().clickable(enabled = submission?.status !in setOf("PENDING_REVIEW", "APPROVED")) { open(task) }) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(7.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { Text(task.categoryId.replaceFirstChar(Char::uppercase), color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold); Text("${task.reward} coin", fontWeight = FontWeight.Bold) }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) { StatusChip(categoryName); Text("${task.reward} coin", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
             Text(task.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
             Text(task.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2)
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { AssistChip(onClick = {}, label = { Text((submission?.status ?: task.status).replace('_', ' ')) }); task.deadline?.let { Text("Due $it", style = MaterialTheme.typography.bodySmall) } }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) { AssistChip(onClick = {}, label = { Text((submission?.status ?: task.status).replace('_', ' ')) }); task.deadline?.let { Text("Due $it", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f)) }; TextButton(onClick = { open(task) }, enabled = submission?.status !in setOf("PENDING_REVIEW", "APPROVED")) { Text("Open") } }
         }
     }
 }
@@ -334,7 +339,8 @@ internal fun AffiliateWallet() {
     val errors = if (attempted) AffiliatePresentationRules.validateCoinShare(recipient, amount, balance) else emptyMap()
     val haptic = LocalHapticFeedback.current
     ModalBottomSheet(onDismissRequest = close) { Column(Modifier.fillMaxWidth().padding(24.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        Text("Share Coin", style = MaterialTheme.typography.headlineMedium); Text("Send coins after recipient verification is available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Share Coin", style = MaterialTheme.typography.headlineMedium); Text("Send your coin after receive verification is available.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Minimum send amount: 1000", fontWeight = FontWeight.SemiBold, color = MaterialTheme.colorScheme.primary)
         OutlinedTextField(recipient, { recipient = it; unavailable = false }, Modifier.fillMaxWidth(), label = { Text("Recipient URL") }, placeholder = { Text("https://...") }, isError = errors["recipient"] != null, supportingText = { errors["recipient"]?.let { Text(it) } })
         OutlinedTextField(amount, { amount = it.filter { ch -> ch.isDigit() || ch == '.' }; unavailable = false }, Modifier.fillMaxWidth(), label = { Text("Coin Amount") }, isError = errors["amount"] != null, supportingText = { errors["amount"]?.let { Text(it) } })
         AnimatedVisibility(unavailable) { Text("Coin sharing will be activated after recipient verification is configured.", color = MaterialTheme.colorScheme.primary) }
@@ -351,12 +357,8 @@ internal fun AffiliateSettings() {
     val appearance by app.appearance.collectAsState()
     var showDashboard by remember { mutableStateOf(false) }
     var showProfile by remember { mutableStateOf(false) }
-    var editProfile by remember { mutableStateOf(false) }
-    var profileName by remember { mutableStateOf(app.store.friendlyName.ifBlank { "Affiliate user" }) }
     var dashboardGeneration by remember { mutableStateOf(0) }
     val haptic = LocalHapticFeedback.current
-    var callLogEnabled by remember { mutableStateOf(Permissions.hasCallLog(context)) }
-    val callLogPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { callLogEnabled = it }
     val accountState by app.affiliateAccount.state.collectAsState()
     val accountProfile = (accountState as? AffiliateAuthState.SignedIn)?.profile
     val avatar by produceState<android.graphics.Bitmap?>(null, app.store.profileUri) {
@@ -368,9 +370,9 @@ internal fun AffiliateSettings() {
     if (showProfile && accountProfile != null) { AffiliateProfileScreen(accountProfile) { showProfile = false }; return }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         AffiliateHeader("Settings", "Personal, private, and uncomplicated")
-        SettingsTitle("Profile"); PremiumCard(Modifier.fillMaxWidth().clickable { showProfile = true }) { Row(verticalAlignment = Alignment.CenterVertically) {
-            if (avatar != null) Image(avatar!!.asImageBitmap(), "Profile avatar", Modifier.size(58.dp).clip(CircleShape)) else Box(Modifier.size(58.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Text(profileName.take(1).uppercase(), style = MaterialTheme.typography.headlineMedium) }
-            Spacer(Modifier.size(14.dp)); Column(Modifier.weight(1f)) { Text(profileName, style = MaterialTheme.typography.titleLarge); Text("Your Affiliate profile", color = MaterialTheme.colorScheme.onSurfaceVariant) }; IconButton(onClick = { editProfile = true }) { Icon(Icons.Rounded.Edit, "Change Name") }
+        SettingsTitle("Account"); PremiumCard(Modifier.fillMaxWidth().clickable { showProfile = true }) { Row(verticalAlignment = Alignment.CenterVertically) {
+            if (avatar != null) Image(avatar!!.asImageBitmap(), "Profile avatar", Modifier.size(58.dp).clip(CircleShape)) else Box(Modifier.size(58.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Text((accountProfile?.fullName ?: "A").take(1).uppercase(), style = MaterialTheme.typography.headlineMedium) }
+            Spacer(Modifier.size(14.dp)); Column(Modifier.weight(1f)) { Text(accountProfile?.fullName ?: "Affiliate user", style = MaterialTheme.typography.titleLarge); Text("View or edit account", color = MaterialTheme.colorScheme.onSurfaceVariant) }
         } }
         SettingsTitle("Text Downloader"); SettingsRow(Icons.Rounded.Download, "Download My Data", "Export your Affiliate activity as a TXT file") { if (app.affiliate.localData.file.isFile) exporter.launch("Affiliate-user-data.txt") else Toast.makeText(context, "No activity to export yet", Toast.LENGTH_SHORT).show() }
         SettingsTitle("Appearance"); PremiumCard(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { ThemeMode.entries.forEach { mode -> val text = if (mode == ThemeMode.SYSTEM) "System Default" else mode.name.lowercase().replaceFirstChar(Char::uppercase); if (appearance == mode) Button(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } else OutlinedButton(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } } } }
@@ -378,15 +380,10 @@ internal fun AffiliateSettings() {
         if (showDashboard) {
             if (app.store.paired) { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Dashboard connected", style = MaterialTheme.typography.titleMedium); Text("Regenerate only when you want to replace the current dashboard connection.", color = MaterialTheme.colorScheme.onSurfaceVariant); OutlinedButton(onClick = { app.store.regeneratePairingToken(); app.socket.disconnect(false); app.socket.retryNow(); dashboardGeneration++ }) { Text("Regenerate Dashboard Code") } } } }
             else { val payload = remember(app.store.pairingToken, dashboardGeneration) { PairingJson.encode(app.store) }; val qr = remember(payload) { QrEncoder.encode(payload) }; PremiumCard(Modifier.fillMaxWidth()) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Scan this private one-time code from your dashboard."); Card(colors = CardDefaults.cardColors(containerColor = Color.White)) { Image(qr.asImageBitmap(), "Dashboard QR Code", Modifier.fillMaxWidth().height(220.dp).padding(14.dp)) }; OutlinedButton(onClick = { clipboard.setText(AnnotatedString(payload)); haptic.performHapticFeedback(HapticFeedbackType.LongPress); Toast.makeText(context, "Dashboard code copied", Toast.LENGTH_SHORT).show() }) { Text("Copy Dashboard Code") } } } }
-            PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Call Log", style = MaterialTheme.typography.titleMedium); Text(if (callLogEnabled) "Call Log access is enabled." else "Call Log access is not enabled on this phone.", color = MaterialTheme.colorScheme.onSurfaceVariant); if (!callLogEnabled) OutlinedButton(onClick = { callLogPermission.launch(Manifest.permission.READ_CALL_LOG) }) { Text("Enable Call Log Access") } } }
         }
         SettingsTitle("App Information"); PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Affiliate", style = MaterialTheme.typography.titleLarge); Text("Software Version  ${BuildConfig.VERSION_NAME}"); Text("Build Number  ${BuildConfig.VERSION_CODE}") } }
-        SettingsTitle("Account"); SettingsRow(Icons.Rounded.Logout, "Logout", "Sign out securely on this phone") { app.affiliateAccount.logout() }
+        SettingsTitle("Logout"); SettingsRow(Icons.Rounded.Logout, "Logout", "Sign out securely") { app.affiliateAccount.logout() }
         Spacer(Modifier.height(24.dp))
-    }
-    if (editProfile) {
-        var name by remember { mutableStateOf(app.store.friendlyName) }
-        AlertDialog(onDismissRequest = { editProfile = false }, title = { Text("Change Name") }, text = { OutlinedTextField(name, { name = it.take(80) }, label = { Text("Name") }, singleLine = true) }, confirmButton = { Button(enabled = name.trim().length >= 2, onClick = { profileName = name.trim(); app.store.friendlyName = profileName; app.affiliateAccount.update(buildJsonObject { put("full_name", profileName) }); editProfile = false }) { Text("Save") } }, dismissButton = { TextButton(onClick = { editProfile = false }) { Text("Cancel") } })
     }
 }
 
@@ -394,6 +391,7 @@ internal fun AffiliateSettings() {
 private fun AffiliateProfileScreen(profile: AffiliateProfile, back: () -> Unit) {
     val app = OwnerLinkApp.instance; val context = LocalContext.current; val scope = rememberCoroutineScope()
     var edit by remember { mutableStateOf(false) }
+    var password by remember { mutableStateOf(false) }
     val photoPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> if (uri != null) scope.launch {
         val encoded = withContext(Dispatchers.IO) { compressProfilePhoto(context.contentResolver.openInputStream(uri)?.use(BitmapFactory::decodeStream)) }
         encoded?.let { app.affiliateAccount.update(buildJsonObject { put("profile_photo_base64", it); put("profile_photo_mime", "image/jpeg") }) }
@@ -401,9 +399,22 @@ private fun AffiliateProfileScreen(profile: AffiliateProfile, back: () -> Unit) 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Row(Modifier.padding(top = 18.dp), verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }; Text("Profile", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) } }
         item { PremiumCard(Modifier.fillMaxWidth()) { Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Box(Modifier.size(82.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.Person, null, Modifier.size(42.dp)) }; Text(profile.fullName, style = MaterialTheme.typography.headlineSmall); Text(profile.phoneNumber); OutlinedButton(onClick = { photoPicker.launch(arrayOf("image/*")) }) { Text("Change Profile Photo") } } } }
-        item { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { ProfileLine("Age", profile.age.toString()); ProfileLine("Education", profile.education); ProfileLine("Address", profile.address); ProfileLine("Site Address", profile.siteAddress); ProfileLine("Withdrawal Method", profile.withdrawalMethod); ProfileLine("Withdrawal Number", profile.withdrawalNumberMasked); Button(onClick = { edit = true }, Modifier.fillMaxWidth()) { Text("Edit Profile") } } } }
+        item { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { ProfileLine("Account Number", profile.userId); ProfileLine("Age", profile.age.toString()); ProfileLine("Education", profile.education); ProfileLine("Address", profile.address); ProfileLine("Site Address", profile.siteAddress); ProfileLine("Withdrawal Method", profile.withdrawalMethod); ProfileLine("Withdrawal Number", profile.withdrawalNumberMasked); Button(onClick = { edit = true }, Modifier.fillMaxWidth()) { Text("Edit Profile") }; OutlinedButton(onClick = { password = true }, Modifier.fillMaxWidth()) { Icon(Icons.Rounded.Lock, null); Spacer(Modifier.width(8.dp)); Text("Change Password") } } } }
     }
     if (edit) ProfileEditDialog(profile, { edit = false }) { body -> app.affiliateAccount.update(body); edit = false }
+    if (password) ChangePasswordDialog({ password = false }) { current, next, confirm ->
+        app.affiliateAccount.changePassword(current, next, confirm) { password = false; Toast.makeText(context, "Password changed", Toast.LENGTH_SHORT).show() }
+    }
+}
+
+@Composable private fun ChangePasswordDialog(close: () -> Unit, save: (String, String, String) -> Unit) {
+    var current by remember { mutableStateOf("") }; var next by remember { mutableStateOf("") }; var confirm by remember { mutableStateOf("") }
+    val valid = current.isNotBlank() && next.length >= 8 && next.any(Char::isLetter) && next.any(Char::isDigit) && next == confirm
+    AlertDialog(onDismissRequest = close, title = { Text("Change Password") }, text = { Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(current, { current = it }, label = { Text("Current Password") }, visualTransformation = PasswordVisualTransformation())
+        OutlinedTextField(next, { next = it }, label = { Text("New Password") }, visualTransformation = PasswordVisualTransformation())
+        OutlinedTextField(confirm, { confirm = it }, label = { Text("Confirm New Password") }, visualTransformation = PasswordVisualTransformation())
+    } }, confirmButton = { Button(enabled = valid, onClick = { save(current, next, confirm) }) { Text("Change Password") } }, dismissButton = { TextButton(onClick = close) { Text("Cancel") } })
 }
 
 @Composable private fun ProfileLine(label: String, value: String) { Column { Text(label, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant); Text(value) } }

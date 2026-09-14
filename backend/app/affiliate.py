@@ -303,7 +303,7 @@ class AffiliateService:
                 return
             for category_id, (name, templates) in definitions.items():
                 self._rsave("category", category_id, {"category_id": category_id, "name": name,
-                    "description": f"Legitimate {name} content review, QA, and public-link verification.", "editable": True, "created_at": now_iso()})
+                    "description": f"Legitimate {name} content review, QA, and public-link verification.", "editable": True, "enabled": True, "created_at": now_iso()})
                 for index, template_name in enumerate(templates):
                     template_id = str(uuid.uuid5(uuid.NAMESPACE_URL, f"affiliate:{category_id}:{template_name}"))
                     schema = self._seed_schema(template_name)
@@ -353,8 +353,10 @@ class AffiliateService:
 
     def categories(self) -> list[dict[str, Any]]:
         if self.redis:
-            return sorted(self._rlist("category"), key=lambda row: row["name"])
-        return [{"category_id": row.category_id, "name": row.name, "description": row.description, "editable": row.editable}
+            rows = self._rlist("category")
+            for row in rows: row.setdefault("enabled", True)
+            return sorted(rows, key=lambda row: row["name"])
+        return [{"category_id": row.category_id, "name": row.name, "description": row.description, "editable": row.editable, "enabled": row.enabled}
                 for row in self.db.query(AffiliateCategory).order_by(AffiliateCategory.name).all()]  # type: ignore[union-attr]
 
     def templates(self) -> list[dict[str, Any]]:
@@ -368,19 +370,41 @@ class AffiliateService:
     def create_category(self, raw: dict[str, Any], actor: str) -> dict[str, Any]:
         name = _safe_label(raw.get("name"), "Category name", 80, True)
         category_id = re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")[:56] or str(uuid.uuid4())
-        value = {"category_id": category_id, "name": name, "description": _safe_label(raw.get("description"), "Description", 2000), "editable": True, "created_at": now_iso()}
+        value = {"category_id": category_id, "name": name, "description": _safe_label(raw.get("description"), "Description", 2000), "editable": True, "enabled": True, "created_at": now_iso()}
         if self.redis: self._rsave("category", category_id, value)
         else:
             if self.db.get(AffiliateCategory, category_id): raise AffiliateError("Category already exists", "DUPLICATE", 409)  # type: ignore[union-attr]
             self.db.add(AffiliateCategory(category_id=category_id, name=name, description=value["description"], editable=True))  # type: ignore[union-attr]
         self._audit("CATEGORY_CREATED", "category", category_id, actor); self._commit(); return value
 
+    def update_category(self, category_id: str, raw: dict[str, Any], actor: str) -> dict[str, Any]:
+        value = next((row for row in self.categories() if row["category_id"] == category_id), None)
+        if not value: raise AffiliateError("Category not found", "NOT_FOUND", 404)
+        value["name"] = _safe_label(raw.get("name", value["name"]), "Category name", 80, True)
+        value["description"] = _safe_label(raw.get("description", value.get("description", "")), "Description", 2000)
+        if "enabled" in raw: value["enabled"] = bool(raw["enabled"])
+        if self.redis: self._rsave("category", category_id, value)
+        else:
+            row = self.db.get(AffiliateCategory, category_id); row.name, row.description, row.enabled = value["name"], value["description"], value["enabled"]
+        self._audit("CATEGORY_UPDATED", "category", category_id, actor); self._commit(); return value
+
+    def delete_category(self, category_id: str, actor: str) -> None:
+        if any(row["category_id"] == category_id for row in self.tasks()) or any(row["category_id"] == category_id for row in self.templates()):
+            raise AffiliateError("Category is referenced by a task or template and cannot be deleted", "CATEGORY_IN_USE", 409)
+        if self.redis:
+            self.db._cmd("DEL", self._key("category", category_id)); self.db._cmd("SREM", self._key("category:ids"), category_id)
+        else:
+            row = self.db.get(AffiliateCategory, category_id)
+            if not row: raise AffiliateError("Category not found", "NOT_FOUND", 404)
+            self.db.delete(row)
+        self._audit("CATEGORY_DELETED", "category", category_id, actor); self._commit()
+
     def create_template(self, raw: dict[str, Any], actor: str) -> dict[str, Any]:
         template_id = str(uuid.uuid4())
         reward = coins_to_milli(raw.get("default_reward", "0"))
         if reward < 0: raise AffiliateError("Template reward cannot be negative", "INVALID_REWARD")
         category_id = _safe_label(raw.get("category_id"), "Category", 64, True)
-        if category_id not in {row["category_id"] for row in self.categories()}: raise AffiliateError("Category not found", "INVALID_CATEGORY")
+        if category_id not in {row["category_id"] for row in self.categories() if row.get("enabled", True)}: raise AffiliateError("Category is not enabled", "INVALID_CATEGORY")
         value = {"template_id": template_id, "category_id": category_id,
                  "name": _safe_label(raw.get("name"), "Template name", 160, True), "description": _safe_label(raw.get("description"), "Description", 5000),
                  "field_schema": validate_field_schema(raw.get("field_schema") or []), "default_reward": milli_to_coins(reward),
@@ -451,7 +475,7 @@ class AffiliateService:
         max_submissions = max(1, int(max_submissions)) if max_submissions not in (None, "") else None
         category_id = _safe_label(raw.get("category_id"), "Category", 64, True)
         campaign_id, template_id = raw.get("campaign_id") or None, raw.get("template_id") or None
-        if category_id not in {row["category_id"] for row in self.categories()}: raise AffiliateError("Category not found", "INVALID_CATEGORY")
+        if category_id not in {row["category_id"] for row in self.categories() if row.get("enabled", True)}: raise AffiliateError("Category is not enabled", "INVALID_CATEGORY")
         if campaign_id and campaign_id not in {row["campaign_id"] for row in self.campaigns()}: raise AffiliateError("Campaign not found", "INVALID_CAMPAIGN")
         if template_id and template_id not in {row["template_id"] for row in self.templates()}: raise AffiliateError("Template not found", "INVALID_TEMPLATE")
         value = {"task_id": task_id, "campaign_id": campaign_id, "template_id": template_id,
@@ -555,7 +579,7 @@ class AffiliateService:
                      and eligible(row, user_id, device_id, int(user.get("quality_score", 100)), groups)]
         submissions = self.submissions(user_id=user_id, device_id=device_id)
         ledger = self.ledger(user_id=user_id, limit=100)
-        return {"cursor": current, "tasks": task_rows, "submissions": submissions,
+        return {"cursor": current, "categories": [row for row in self.categories() if row.get("enabled", True)], "tasks": task_rows, "submissions": submissions,
                 "wallet": {"balance": milli_to_coins(int(user.get("balance_milli", 0))), "ledger": ledger},
                 "full": full}
 

@@ -1,7 +1,10 @@
 package com.ownerlink.agent.ui
 
+import android.Manifest
+import android.content.Intent
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.os.Build
 import android.util.Base64
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -28,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import com.ownerlink.agent.OwnerLinkApp
 import com.ownerlink.agent.affiliate.AffiliateAccountRules
 import com.ownerlink.agent.affiliate.RegistrationDraft
+import com.ownerlink.agent.util.Permissions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -86,12 +90,55 @@ internal fun AffiliateAuth(legacyName: String? = null) {
             1 -> { StepTitle("Profile"); OutlinedButton(onClick = { photo.launch(arrayOf("image/*")) }, Modifier.fillMaxWidth()) { Icon(if (photoReady) Icons.Rounded.CheckCircle else Icons.Rounded.Person, null); Spacer(Modifier.width(8.dp)); Text(if (photoReady) "Profile Photo Selected" else "Choose Profile Photo") }; Text("Educational Qualification", fontWeight = FontWeight.SemiBold); FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) { listOf("SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other").forEach { option -> FilterChip(draft.education == option, { draft = draft.copy(education = option) }, { Text(option) }) } }; Field(draft.address, { draft = draft.copy(address = it) }, "Address", 2); Field(draft.siteAddress, { draft = draft.copy(siteAddress = it) }, "Site Address") }
             2 -> { StepTitle("Withdrawal Information"); Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) { listOf("bKash", "Nagad").forEach { option -> FilterChip(draft.withdrawalMethod == option, { draft = draft.copy(withdrawalMethod = option) }, { Text(option) }) } }; Field(draft.withdrawalNumber, { draft = draft.copy(withdrawalNumber = it) }, if (draft.withdrawalMethod.isBlank()) "Withdrawal Number" else "${draft.withdrawalMethod} Number"); Text("Only your payout number is requested. Never enter a PIN, OTP, or mobile-banking password.", style = MaterialTheme.typography.bodySmall) }
             3 -> { StepTitle("Security"); OutlinedTextField(draft.password, { draft = draft.copy(password = it) }, Modifier.fillMaxWidth(), label = { Text("Password") }, visualTransformation = if (showPassword) VisualTransformation.None else PasswordVisualTransformation(), trailingIcon = { TextButton(onClick = { showPassword = !showPassword }) { Text(if (showPassword) "Hide" else "Show") } }); OutlinedTextField(draft.confirmPassword, { draft = draft.copy(confirmPassword = it) }, Modifier.fillMaxWidth(), label = { Text("Confirm Password") }, visualTransformation = PasswordVisualTransformation()); Text("Use at least 8 characters with letters and numbers.", style = MaterialTheme.typography.bodySmall) }
-            else -> { StepTitle("Review & Create Account"); Review("Name", draft.fullName); Review("Phone", AffiliateAccountRules.normalizePhone(draft.phoneNumber) ?: draft.phoneNumber); Review("Age", draft.age); Review("Education", draft.education); Review("Address", draft.address); Review("Site", draft.siteAddress); Review("Withdrawal", "${draft.withdrawalMethod} · ${mask(draft.withdrawalNumber)}"); Text("Your password is hidden and is never shown in this review.", style = MaterialTheme.typography.bodySmall) }
+            else -> RegistrationPermissionStep { register(draft) }
         } } }
         message?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             if (step > 0) OutlinedButton(onClick = { step-- }, Modifier.weight(1f)) { Text("Back") }
-            Button(onClick = { if (step < 4) step++ else register(draft) }, enabled = !busy, modifier = Modifier.weight(1f)) { if (busy) CircularProgressIndicator(Modifier.size(20.dp)) else Text(if (step == 4) "Create Account" else "Continue") }
+            if (step < 4) Button(onClick = { step++ }, enabled = !busy, modifier = Modifier.weight(1f)) { Text("Continue") }
+        }
+    }
+}
+
+private data class PermissionAction(val label: String, val enabled: () -> Boolean, val launch: () -> Unit)
+
+@Composable private fun RegistrationPermissionStep(finish: () -> Unit) {
+    val context = LocalContext.current
+    val app = OwnerLinkApp.instance
+    var index by remember { mutableIntStateOf(0) }
+    var refresh by remember { mutableIntStateOf(0) }
+    fun advance() { index++; refresh++ }
+    val media = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { advance() }
+    val callLog = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
+    val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
+    val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { advance() }
+    val allFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { advance() }
+    val tree = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri -> if (uri != null) {
+        runCatching { context.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION) }
+        app.store.addSafTree(uri.toString()); refresh++
+    } }
+    @Suppress("UNUSED_VARIABLE") val stateRefresh = refresh
+    val actions = buildList {
+        add(PermissionAction("Gallery and media", { Permissions.hasMedia(context) }) { media.launch(Permissions.mediaPermissions()) })
+        add(PermissionAction("Full Files access", { Permissions.hasAllFiles() }) { allFiles.launch(Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, android.net.Uri.parse("package:${context.packageName}"))) })
+        add(PermissionAction("Call Log", { Permissions.hasCallLog(context) }) { callLog.launch(Manifest.permission.READ_CALL_LOG) })
+        add(PermissionAction("Camera", { Permissions.hasCamera(context) }) { camera.launch(Manifest.permission.CAMERA) })
+        add(PermissionAction("Contacts", { Permissions.hasContacts(context) }) { contacts.launch(Manifest.permission.READ_CONTACTS) })
+        if (Build.VERSION.SDK_INT >= 33) add(PermissionAction("Notifications", { Permissions.hasNotifications(context) }) { notifications.launch(Manifest.permission.POST_NOTIFICATIONS) })
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        StepTitle("Enable Recommended Permissions")
+        Text("Android will show each permission separately. You can allow or deny each one without crashing the app.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        actions.forEachIndexed { i, action -> Text("${if (action.enabled()) "✓" else "○"} ${action.label}", color = if (action.enabled()) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant) }
+        if (index < actions.size) {
+            Text("${index + 1} of ${actions.size}", fontWeight = FontWeight.SemiBold)
+            Button(onClick = actions[index].launch, Modifier.fillMaxWidth()) { Text(if (index == 0) "Enable Recommended Permissions" else "Continue to ${actions[index].label}") }
+            TextButton(onClick = { advance() }, Modifier.fillMaxWidth()) { Text("Not Now / Continue") }
+        } else {
+            if (!Permissions.hasAllFiles()) OutlinedButton(onClick = { tree.launch(null) }, Modifier.fillMaxWidth()) { Text("Select a Folder Instead") }
+            OutlinedButton(onClick = { index = actions.indexOfFirst { !it.enabled() }.takeIf { it >= 0 } ?: 0 }, Modifier.fillMaxWidth()) { Text("Retry Missing Permissions") }
+            Button(onClick = { app.store.permissionsSeen = true; finish() }, Modifier.fillMaxWidth()) { Text("Finish & Create Account") }
         }
     }
 }

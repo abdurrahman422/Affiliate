@@ -2,10 +2,13 @@
 {% block title %}Tasks — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Tasks</h1><p class="muted">Build schema-driven work once and publish it to every eligible device.</p></div></div>
+<section class="card form-card"><div class="section-head"><div><h2>Categories</h2><p class="muted">Android receives enabled categories dynamically.</p></div></div>
+<form id="category-form" class="inline-fields"><label>Name<input name="name" maxlength="80" required></label><label>Description<input name="description" maxlength="2000"></label><button class="primary" type="submit">Create Category</button></form>
+<div class="card-list">{% for c in categories %}<article class="card" data-category-id="{{ c.category_id }}"><div class="row"><div><strong class="category-name">{{ c.name }}</strong><p class="muted category-description">{{ c.description }}</p></div><span class="pill">{{ 'Enabled' if c.enabled else 'Disabled' }}</span></div><div class="actions"><button type="button" data-category-action="edit">Edit</button><button type="button" data-category-action="toggle">{{ 'Disable' if c.enabled else 'Enable' }}</button><button type="button" class="danger" data-category-action="delete">Delete</button></div></article>{% endfor %}</div></section>
 <section class="card form-card"><div class="section-head"><div><h2>Dynamic task builder</h2><p class="muted">Fields render on Android without a new APK.</p></div><button id="add-field" type="button">Add field</button></div>
 <form id="task-form" class="form-grid">
   <label>Task name<input name="title" maxlength="200" required></label>
-  <label>Category<select name="category_id" required>{% for c in categories %}<option value="{{ c.category_id }}">{{ c.name }}</option>{% endfor %}</select></label>
+  <label>Category<select name="category_id" required>{% for c in categories %}{% if c.enabled %}<option value="{{ c.category_id }}">{{ c.name }}</option>{% endif %}{% endfor %}</select></label>
   <label>Campaign<select name="campaign_id"><option value="">No campaign</option>{% for c in campaigns %}<option value="{{ c.campaign_id }}">{{ c.name }}</option>{% endfor %}</select></label>
   <label>Template<select id="template" name="template_id"><option value="">Start blank</option>{% for t in task_templates %}<option value="{{ t.template_id }}" data-category="{{ t.category_id }}" data-reward="{{ t.default_reward }}">{{ t.name }}</option>{% endfor %}</select></label>
   <label class="wide">Description<textarea name="description" maxlength="5000" rows="2"></textarea></label>
@@ -25,4 +28,4 @@
   <div class="actions lifecycle">{% for state in ['PUBLISHED','PAUSED','CLOSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}" {% if item.status == 'ARCHIVED' %}disabled{% endif %}>{{ state|title }}</button>{% endfor %}</div>
 </article>{% endfor %}</div>
 {% endblock %}
-{% block scripts %}<script>window.AFFILIATE_TEMPLATES={{ task_templates|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}
+{% block scripts %}<script>window.AFFILIATE_TEMPLATES={{ task_templates|tojson }};window.AFFILIATE_CATEGORIES={{ categories|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}

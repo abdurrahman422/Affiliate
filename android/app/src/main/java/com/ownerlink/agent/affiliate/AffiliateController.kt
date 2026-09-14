@@ -18,6 +18,7 @@ import com.ownerlink.agent.network.Protocol
 import com.ownerlink.agent.network.str
 
 data class AffiliateUiState(
+    val categories: List<AffiliateCategoryItem> = emptyList(),
     val tasks: List<AffiliateTaskItem> = emptyList(),
     val submissions: List<AffiliateSubmissionItem> = emptyList(),
     val ledger: List<AffiliateLedgerItem> = emptyList(),
@@ -107,6 +108,7 @@ class AffiliateController(
 
     private fun applySync(payload: JsonObject) {
         scope.launch(Dispatchers.IO) {
+            val categories = AffiliateJson.objects(payload["categories"]).map { AffiliateCategoryItem(it.str("category_id").orEmpty(), it.str("name").orEmpty()) }.filter { it.categoryId.isNotBlank() }
             val taskObjects = AffiliateJson.objects(payload["tasks"])
             val entities = taskObjects.map { value ->
                 val task = AffiliateJson.task(value)
@@ -125,7 +127,7 @@ class AffiliateController(
             ) }
             store.dao.saveLedger(ledger)
             store.dao.saveSync(AffiliateSyncEntity(value = payload["cursor"]?.jsonPrimitive?.contentOrNull ?: "0"))
-            rebuildRecord(); refreshLocalNow(wallet?.str("balance"))
+            rebuildRecord(); refreshLocalNow(wallet?.str("balance"), categories)
         }
     }
 
@@ -148,7 +150,7 @@ class AffiliateController(
 
     private fun refreshLocal() { scope.launch(Dispatchers.IO) { refreshLocalNow() } }
 
-    private fun refreshLocalNow(balanceOverride: String? = null) {
+    private fun refreshLocalNow(balanceOverride: String? = null, categoryOverride: List<AffiliateCategoryItem>? = null) {
         val taskEntities = store.dao.tasks()
         val submissions = store.dao.submissions()
         val ledger = store.dao.ledger()
@@ -160,7 +162,7 @@ class AffiliateController(
         val uiSubmissions = submissions.map { AffiliateSubmissionItem(it.submissionId, it.clientSubmissionId, it.taskId, it.status, it.fieldsJson, it.createdAt, it.updatedAt, it.reviewReason) }
         val uiLedger = ledger.map { AffiliateLedgerItem(it.ledgerId, it.taskId, it.amount, it.reason, it.balanceAfter, it.createdAt) }
         val balance = balanceOverride ?: ledger.firstOrNull()?.balanceAfter ?: _state.value.balance
-        _state.value = AffiliateUiState(tasks, uiSubmissions, uiLedger, balance, loading = false)
+        _state.value = AffiliateUiState(categoryOverride ?: _state.value.categories, tasks, uiSubmissions, uiLedger, balance, loading = false)
     }
 
     private fun rebuildRecord() = localData.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger(), profileJson())

@@ -95,6 +95,7 @@ class AffiliateCategory(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False, unique=True)
     description: Mapped[str] = mapped_column(Text, nullable=False, default="")
     editable: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, nullable=False)
 
 

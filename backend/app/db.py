@@ -64,6 +64,10 @@ def init_db(engine: Engine) -> None:
                 if name not in existing:
                     connection.execute(text(f"ALTER TABLE affiliate_users ADD COLUMN {name} {declaration}"))
             connection.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_affiliate_users_phone_number ON affiliate_users(phone_number)"))
+        category_columns = {column["name"] for column in inspect(engine).get_columns("affiliate_categories")}
+        if "enabled" not in category_columns:
+            with engine.begin() as connection:
+                connection.execute(text("ALTER TABLE affiliate_categories ADD COLUMN enabled BOOLEAN NOT NULL DEFAULT 1"))
 
 
 def session_factory(engine: Engine) -> sessionmaker[Session]:

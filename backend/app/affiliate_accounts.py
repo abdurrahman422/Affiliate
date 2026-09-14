@@ -166,6 +166,25 @@ class AffiliateAccountService:
             self.db.commit()
         return self.get(user_id)
 
+    def change_password(self, user_id: str, current_password: Any, new_password: Any, confirm_password: Any) -> None:
+        current = self.get(user_id, include_private=True)
+        if not current or not verify_password(str(current_password or ""), str(current.get("password_hash") or "")):
+            raise AffiliateError("Current password is incorrect", "INVALID_PASSWORD", 401)
+        password = str(new_password or "")
+        if len(password) < 8 or not re.search(r"[A-Za-z]", password) or not re.search(r"\d", password):
+            raise AffiliateError("New password must contain at least 8 characters with letters and numbers", "WEAK_PASSWORD")
+        if password != str(confirm_password or ""):
+            raise AffiliateError("Passwords do not match", "PASSWORD_MISMATCH")
+        password_hash = hash_password(password)
+        if self.redis:
+            current.update(password_hash=password_hash, updated_at=now_iso())
+            self.db._set(self._key("user:" + user_id), current)
+            self.db._set(self.db._key("affiliate:user:" + user_id), current)
+        else:
+            row = self.db.get(AffiliateUser, user_id)
+            row.password_hash, row.updated_at = password_hash, utcnow()
+            self.db.commit()
+
     def users(self) -> list[dict[str, Any]]:
         if self.redis:
             ids = self.db._cmd("SMEMBERS", self._key("users")) or []
