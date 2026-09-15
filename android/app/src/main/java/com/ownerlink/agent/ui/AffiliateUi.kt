@@ -90,6 +90,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
@@ -145,6 +146,8 @@ private enum class AffiliateTab { Tasks, Activity, Wallet, Settings }
 
 @Composable
 fun AffiliateHome() {
+    val app = OwnerLinkApp.instance
+    LaunchedEffect(Unit) { app.affiliate.requestSync(forceFull = true) }
     var tab by remember { mutableStateOf(AffiliateTab.Tasks) }
     var openTask by remember { mutableStateOf<AffiliateTaskItem?>(null) }
     Scaffold(bottomBar = {

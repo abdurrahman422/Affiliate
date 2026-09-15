@@ -125,3 +125,11 @@ dependencies {
     androidTestImplementation("androidx.compose.ui:ui-test-junit4")
     debugImplementation("androidx.compose.ui:ui-test-manifest")
 }
+
+android.applicationVariants.all {
+    if (buildType.name == "release") {
+        outputs.all {
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = "Affiliate.apk"
+        }
+    }
+}

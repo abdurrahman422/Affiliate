@@ -6,6 +6,9 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import android.util.Log
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -43,7 +46,18 @@ class AffiliateController(
     private val _state = MutableStateFlow(AffiliateUiState())
     val state: StateFlow<AffiliateUiState> = _state
 
-    init { refreshLocal() }
+    init {
+        refreshLocal()
+        // WebSocket publish events remain the fast path. This low-frequency full
+        // refresh recovers automatically if an event was missed during sleep or
+        // a Render reconnect without creating another socket.
+        scope.launch(Dispatchers.IO) {
+            while (isActive) {
+                delay(60_000)
+                requestSync(forceFull = true)
+            }
+        }
+    }
 
     fun handle(type: String, payload: JsonObject) {
         when (type) {
@@ -73,7 +87,8 @@ class AffiliateController(
     fun requestSync(forceFull: Boolean = false) {
         scope.launch(Dispatchers.IO) {
             val cursor = if (forceFull) 0 else store.dao.cursor()?.toIntOrNull() ?: 0
-            sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor); authToken()?.let { put("auth_token", it) } }))
+            val sent = sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor); authToken()?.let { put("auth_token", it) } }))
+            Log.i(TAG, "task sync requested full=$forceFull sent=$sent")
             retryPending()
         }
     }
@@ -115,6 +130,7 @@ class AffiliateController(
         scope.launch(Dispatchers.IO) {
             val categories = AffiliateJson.objects(payload["categories"]).map { AffiliateCategoryItem(it.str("category_id").orEmpty(), it.str("name").orEmpty()) }.filter { it.categoryId.isNotBlank() }
             val taskObjects = AffiliateJson.objects(payload["tasks"])
+            Log.i(TAG, "task sync received tasks=${taskObjects.size} full=${payload["full"]?.jsonPrimitive?.contentOrNull}")
             val entities = taskObjects.map { value ->
                 val task = AffiliateJson.task(value)
                 AffiliateTaskEntity(task.taskId, task.categoryId, task.title, task.description, task.instructions, task.reward,
@@ -178,5 +194,7 @@ class AffiliateController(
     }
 
     private fun rebuildRecord() = localData.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger(), profileJson())
+
+    private companion object { const val TAG = "AffiliateSync" }
 
 }

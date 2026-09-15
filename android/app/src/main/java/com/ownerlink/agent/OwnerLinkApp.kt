@@ -28,8 +28,13 @@ class OwnerLinkApp : Application() {
         private set
     lateinit var chat: ChatController
         private set
-    lateinit var rtc: PeerRtcManager
-        private set
+    val rtc: PeerRtcManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
+        PeerRtcManager(
+            this, identity.contactId, appScope, { socket.send(it) },
+            onData = chat::handlePeer,
+            onReady = chat::onPeerReady,
+        ).also { peerRef = it }
+    }
     lateinit var affiliate: AffiliateController
         private set
     lateinit var affiliateAccount: AffiliateAccountController
@@ -37,6 +42,7 @@ class OwnerLinkApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _appearance = MutableStateFlow(ThemeMode.SYSTEM)
     val appearance: StateFlow<ThemeMode> = _appearance
+    @Volatile private var peerRef: PeerRtcManager? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -45,7 +51,6 @@ class OwnerLinkApp : Application() {
         _appearance.value = runCatching { ThemeMode.valueOf(store.appearance) }.getOrDefault(ThemeMode.SYSTEM)
         identity = ChatIdentityProvider.loadOrCreate(store)
         var controllerRef: ChatController? = null
-        var peerRef: PeerRtcManager? = null
         var affiliateRef: AffiliateController? = null
         socket = DeviceSocket(this, store, appScope, identity) { type, payload ->
             peerRef?.handle(type, payload) { controllerRef?.contact(it)?.name ?: "PrivatChat contact" }
@@ -59,14 +64,7 @@ class OwnerLinkApp : Application() {
             ensurePeer = { contactId -> peerRef?.ensureDataSession(contactId) },
         )
         controllerRef = controller
-        val peer = PeerRtcManager(
-            this, identity.contactId, appScope, { socket.send(it) },
-            onData = controller::handlePeer,
-            onReady = controller::onPeerReady,
-        )
-        peerRef = peer
         chat = controller
-        rtc = peer
         affiliate = AffiliateController(this, appScope, store.deviceId, { store.affiliateAuthToken }, { store.affiliateProfileJson }) { socket.send(it) }
         affiliateRef = affiliate
         affiliateAccount = AffiliateAccountController(this, store, appScope) { affiliate.requestSync() }
