@@ -352,6 +352,22 @@ class AffiliateService:
         self._audit("DEMO_SEEDED", "system", "v1", "system")
         self.db.commit()  # type: ignore[union-attr]
 
+    def clear_previous_catalog_once(self) -> None:
+        """One-time Affiliate redesign cleanup while preserving submissions and coin history."""
+        if not self.redis:
+            return
+        marker = self._key("catalog-cleanup", "simple-dashboard-v1")
+        if self.db._cmd("SET", marker, "1", "NX") is None:  # type: ignore[attr-defined]
+            return
+        for kind in ("task", "template", "category"):
+            for value in self._rlist(kind):
+                entity_id = str(value.get(f"{kind}_id") or "")
+                if entity_id:
+                    self.db._cmd("DEL", self._key(kind, entity_id))  # type: ignore[attr-defined]
+                    self.db._cmd("SREM", self._key(f"{kind}:ids"), entity_id)  # type: ignore[attr-defined]
+        self._next_version()
+        self._audit("CATALOG_CLEARED", "catalog", "simple-dashboard-v1", "system", {"history_preserved": True})
+
     @staticmethod
     def _seed_schema(name: str) -> list[dict[str, Any]]:
         return validate_field_schema([

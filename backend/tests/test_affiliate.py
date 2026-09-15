@@ -56,7 +56,9 @@ def test_admin_task_crud_lifecycle_and_dashboard(client):
         assert response.status_code == 200
         assert response.json()["task"]["status"] == state
     assert client.get("/tasks").status_code == 200
-    assert "Dynamic task builder" in client.get("/tasks").text
+    assert "Create task" in client.get("/tasks").text
+    assert client.get("/categories").status_code == 200
+    assert client.get("/task-import").status_code == 200
     assert "Coin Ledger" in client.get("/coin-ledger").text
     assert "Devices" in client.get("/devices").text
 

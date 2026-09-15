@@ -116,7 +116,11 @@ def create_app(settings: Settings | None = None) -> FastAPI:
 
     with SessionLocal() as db:
         bootstrap_owner(db, settings)
-        AffiliateService(db).seed_demo()
+        # Affiliate catalog data is created by the owner; production must not recreate demo content.
+        if settings.ENV.strip().lower() == "test":
+            AffiliateService(db).seed_demo()
+        elif settings.is_production:
+            AffiliateService(db).clear_previous_catalog_once()
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -368,9 +372,24 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         db = db_session()
         try:
             service = AffiliateService(db)
-            rows, categories, task_templates, campaigns = service.tasks(), service.categories(), service.templates(), service.campaigns()
+            rows, categories = [row for row in service.tasks() if row["status"] != "ARCHIVED"], service.categories()
         finally: db.close()
-        return page(request, "tasks.html", {"tasks": rows, "categories": categories, "task_templates": task_templates, "campaigns": campaigns})
+        return page(request, "tasks.html", {"tasks": rows, "categories": categories})
+
+    @app.get("/categories", response_class=HTMLResponse)
+    async def categories_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        db = db_session()
+        try: rows = AffiliateService(db).categories()
+        finally: db.close()
+        return page(request, "categories.html", {"categories": rows})
+
+    @app.get("/task-import", response_class=HTMLResponse)
+    async def task_import_page(request: Request):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse): return maybe
+        return page(request, "task_import.html")
 
     @app.get("/submissions", response_class=HTMLResponse)
     async def submissions_page(request: Request):
