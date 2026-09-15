@@ -12,6 +12,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -209,31 +211,43 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit) {
         if (state.categories.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(state.categories) { item -> AssistChip(onClick = { category = item.categoryId }, label = { Text(item.name) }, leadingIcon = if (category == item.categoryId) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
         if (state.loading) item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         if (!state.loading && state.tasks.isEmpty()) item { AffiliateEmpty("No tasks available", "Published tasks will appear here. Cached tasks remain visible offline.") }
-        if (available.any { it.priority >= 10 }) { item { SectionLabel("Priority / Featured") }; items(available.filter { it.priority >= 10 }, key = { "featured-${it.taskId}" }) { TaskCard(it, null, open) } }
-        if (available.any { it.priority < 10 }) { item { SectionLabel("Available") }; items(available.filter { it.priority < 10 }, key = { "available-${it.taskId}" }) { TaskCard(it, null, open) } }
+        if (available.isNotEmpty()) { item { SectionLabel("Available tasks") }; items(available, key = { "available-${it.taskId}" }) { TaskCard(it, null, open) } }
         if (progress.isNotEmpty()) { item { SectionLabel("In Progress") }; items(progress, key = { "progress-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
         if (pending.isNotEmpty()) { item { SectionLabel("Pending Review") }; items(pending, key = { "pending-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
         item { Spacer(Modifier.height(20.dp)) }
     }
 }
 
-@Composable private fun SectionLabel(value: String) { Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 10.dp)) }
+@Composable private fun SectionLabel(value: String) { Row(Modifier.padding(top = 12.dp, bottom = 2.dp), verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape)); Spacer(Modifier.width(9.dp)); Text(value, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) } }
 
 @Composable
 private fun TaskCard(task: AffiliateTaskItem, submission: AffiliateSubmissionItem?, open: (AffiliateTaskItem) -> Unit) {
     val categories = OwnerLinkApp.instance.affiliate.state.collectAsState().value.categories
     val categoryName = categories.firstOrNull { it.categoryId == task.categoryId }?.name ?: task.categoryId
     val enabled = submission?.status !in setOf("PENDING_REVIEW", "APPROVED")
-    Card(Modifier.fillMaxWidth().animateContentSize().clickable(enabled = enabled) { open(task) }, shape = RoundedCornerShape(26.dp), elevation = CardDefaults.cardElevation(3.dp)) {
-        Column(Modifier.background(Brush.linearGradient(listOf(MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.primaryContainer.copy(alpha = .34f)))).padding(18.dp), verticalArrangement = Arrangement.spacedBy(11.dp)) {
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val cardScale by animateFloatAsState(if (pressed) .975f else 1f, spring(stiffness = 520f, dampingRatio = .72f), label = "task-card-press")
+    val accent = if (task.taskType == "URL") Color(0xFF7657FF) else MaterialTheme.colorScheme.primary
+    val stateText = (submission?.status ?: task.status).replace('_', ' ')
+    Card(
+        Modifier.fillMaxWidth().scale(cardScale).animateContentSize()
+            .border(1.dp, accent.copy(alpha = if (pressed) .48f else .20f), RoundedCornerShape(28.dp))
+            .clickable(interactionSource = interaction, indication = null, enabled = enabled) { open(task) },
+        shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(defaultElevation = if (pressed) 1.dp else 5.dp),
+    ) {
+        Column(Modifier.background(Brush.linearGradient(listOf(accent.copy(alpha = .14f), MaterialTheme.colorScheme.surface, MaterialTheme.colorScheme.surfaceVariant.copy(alpha = .45f)))).padding(20.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(46.dp).background(MaterialTheme.colorScheme.primaryContainer, RoundedCornerShape(15.dp)), contentAlignment = Alignment.Center) { Icon(if (task.taskType == "URL") Icons.Rounded.PlayCircle else Icons.Rounded.Description, null, tint = MaterialTheme.colorScheme.primary) }
-                Spacer(Modifier.width(12.dp)); Column(Modifier.weight(1f)) { StatusChip(categoryName); Text(if (task.taskType == "URL") "LINK TASK" else "FORM TASK", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                Column(horizontalAlignment = Alignment.End) { Icon(Icons.Rounded.Stars, null, tint = Color(0xFFFFB84D)); Text("${task.reward} coin", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary) }
+                Box(Modifier.size(54.dp).background(Brush.linearGradient(listOf(accent, accent.copy(alpha = .68f))), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Icon(if (task.taskType == "URL") Icons.Rounded.PlayCircle else Icons.Rounded.Description, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(5.dp)) { Text(if (task.taskType == "URL") "WATCH & EARN" else "ANSWER & EARN", style = MaterialTheme.typography.labelSmall, color = accent, fontWeight = FontWeight.Bold); Text(categoryName, style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                Column(Modifier.background(Color(0xFFFFB84D).copy(alpha = .14f), RoundedCornerShape(16.dp)).padding(horizontal = 12.dp, vertical = 8.dp), horizontalAlignment = Alignment.End) { Row(verticalAlignment = Alignment.CenterVertically) { Icon(Icons.Rounded.Stars, null, tint = Color(0xFFFFA21A), modifier = Modifier.size(18.dp)); Spacer(Modifier.width(4.dp)); Text(task.reward, fontWeight = FontWeight.ExtraBold, color = MaterialTheme.colorScheme.onSurface) }; Text("COINS", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
-            Text(task.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold)
-            Text(task.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3)
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) { AssistChip(onClick = {}, label = { Text((submission?.status ?: task.status).replace('_', ' ')) }); Spacer(Modifier.weight(1f)); Button(onClick = { open(task) }, enabled = enabled) { Text(if (task.taskType == "URL") "Start task" else "View task") } }
+            Column(verticalArrangement = Arrangement.spacedBy(7.dp)) { Text(task.title, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold); Text(task.description, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 3, style = MaterialTheme.typography.bodyMedium) }
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.background(statusColor(submission?.status ?: task.status).copy(alpha = .13f), RoundedCornerShape(50)).padding(horizontal = 11.dp, vertical = 7.dp)) { AnimatedContent(stateText, label = "task-state") { Text(it, color = statusColor(submission?.status ?: task.status), style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold) } }
+                Spacer(Modifier.weight(1f))
+                Button(onClick = { open(task) }, enabled = enabled, shape = RoundedCornerShape(16.dp)) { Icon(if (task.taskType == "URL") Icons.Rounded.PlayCircle else Icons.Rounded.Description, null, Modifier.size(19.dp)); Spacer(Modifier.width(7.dp)); Text(if (task.taskType == "URL") "Let's Watch" else "Open Form", fontWeight = FontWeight.Bold) }
+            }
         }
     }
 }
