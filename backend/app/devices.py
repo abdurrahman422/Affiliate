@@ -81,9 +81,10 @@ def upsert_unpaired(db: Session, device_id: str, pairing_token: str, name: str) 
         log.info("pending unpaired device registered")
         return device
 
-    if device.pairing_consumed and not device.revoked and device.device_session_hash:
-        raise PairingError("Device is already paired. Remove it from the dashboard to re-pair.", "ALREADY_PAIRED")
-
+    # A reinstall/storage fallback can preserve the stable device id while losing only the
+    # dashboard session token. Register the new one-time token so the authenticated dashboard can
+    # explicitly re-pair it. The presented token still has to be redeemed by an admin; this request
+    # alone grants no dashboard access.
     device.pairing_token_hash = token_hash
     device.pairing_consumed = False
     device.device_session_hash = None

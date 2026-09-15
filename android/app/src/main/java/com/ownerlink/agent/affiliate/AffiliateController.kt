@@ -46,7 +46,7 @@ class AffiliateController(
 
     fun handle(type: String, payload: JsonObject) {
         when (type) {
-            Protocol.AUTH_OK, Protocol.UNPAIRED_ACK, Protocol.CHAT_IDENTITY_ACK -> requestSync()
+            Protocol.AUTH_OK, Protocol.UNPAIRED_ACK, Protocol.PAIR_SUCCESS, Protocol.CHAT_IDENTITY_ACK -> requestSync(forceFull = true)
             Protocol.TASK_SYNC -> applySync(payload)
             Protocol.TASK_SUBMISSION_ACK -> {
                 (payload["submission"] as? JsonObject)?.let { saveServerSubmission(it) }

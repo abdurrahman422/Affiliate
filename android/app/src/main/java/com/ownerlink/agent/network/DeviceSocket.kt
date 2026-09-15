@@ -170,9 +170,25 @@ class DeviceSocket(
                 peerHandler(type, payload)
                 socket?.send(Protocol.envelope(Protocol.RTC_CONFIG_REQUEST, store.deviceId))
             }
-            Protocol.UNPAIRED_ACK -> { _state.value = ConnectionState.WaitingForPair; _message.value = "Waiting for owner to scan QR" }
-            Protocol.PAIR_SUCCESS -> { val token = payload.str("session_token") ?: return; store.markPaired(token); _state.value = ConnectionState.Online; _message.value = "Paired and connected" }
-            Protocol.AUTH_OK -> { store.paired = true; store.lastDashboardConnection = System.currentTimeMillis(); _state.value = ConnectionState.Online; _message.value = "Connected" }
+            Protocol.UNPAIRED_ACK -> {
+                _state.value = ConnectionState.WaitingForPair
+                _message.value = "Waiting for dashboard connection"
+                peerHandler(type, payload)
+            }
+            Protocol.PAIR_SUCCESS -> {
+                val token = payload.str("session_token") ?: return
+                store.markPaired(token)
+                _state.value = ConnectionState.Online
+                _message.value = "Paired and connected"
+                peerHandler(type, payload)
+            }
+            Protocol.AUTH_OK -> {
+                store.paired = true
+                store.lastDashboardConnection = System.currentTimeMillis()
+                _state.value = ConnectionState.Online
+                _message.value = "Connected"
+                peerHandler(type, payload)
+            }
             Protocol.PEER_MESSAGE, Protocol.PEER_DELIVER, Protocol.PEER_DELIVERED, Protocol.PEER_READ,
             Protocol.PEER_PRESENCE, Protocol.PRESENCE_UPDATE, Protocol.PEER_CONNECT_REQUEST,
             Protocol.PEER_CONNECT_ACCEPT, Protocol.PEER_CONNECT_REJECT, Protocol.PEER_SIGNAL,

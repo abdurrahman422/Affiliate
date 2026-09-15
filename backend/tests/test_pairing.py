@@ -130,6 +130,25 @@ def test_removed_device_can_pair_with_new_token(client):
         assert ws.receive_json()["type"] == "PAIR_SUCCESS"
 
 
+def test_device_with_lost_session_can_register_fresh_redeem_code(client):
+    csrf = login(client)
+    device_id, first_token = new_device_id(), pairing_token()
+    with client.websocket_connect("/ws/device") as ws:
+        unpaired_hello(ws, device_id, first_token, "Recovered Phone")
+        assert _pair(client, csrf, device_id, first_token, "Recovered Phone").status_code == 200
+        ws.receive_json()
+
+    fresh_token = pairing_token()
+    with client.websocket_connect("/ws/device") as ws:
+        ack = unpaired_hello(ws, device_id, fresh_token, "Recovered Phone")
+        assert ack["type"] == "UNPAIRED_ACK"
+        old = _pair(client, csrf, device_id, first_token, "Recovered Phone")
+        assert old.status_code == 400
+        recovered = _pair(client, csrf, device_id, fresh_token, "Recovered Phone")
+        assert recovered.status_code == 200
+        assert ws.receive_json()["type"] == "PAIR_SUCCESS"
+
+
 def test_device_can_disconnect_its_own_dashboard_session(client):
     csrf = login(client)
     device_id = new_device_id(); token = pairing_token()

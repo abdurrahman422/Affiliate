@@ -86,9 +86,6 @@ class RedisStore:
 
     def upsert_unpaired(self, device_id: str, token: str, name: str) -> StoredDevice:
         current = self.get_device(device_id)
-        if current and current.pairing_consumed and not current.revoked and current.device_session_hash:
-            from .devices import PairingError
-            raise PairingError("Device is already paired. Remove it from the dashboard to re-pair.", "ALREADY_PAIRED")
         device = current or StoredDevice(device_id, name.strip()[:128] or "Android Device", created_at=utcnow())
         device.pairing_token_hash, device.pairing_consumed, device.device_session_hash, device.revoked = hash_secret(token), False, None, False
         device.friendly_name, device.last_seen = name.strip()[:128] or device.friendly_name, utcnow()
