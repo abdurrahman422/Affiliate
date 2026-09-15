@@ -198,7 +198,6 @@ private fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -
 @Composable
 private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit, connectDashboard: () -> Unit) {
     val app = OwnerLinkApp.instance
-    val context = LocalContext.current
     val state by app.affiliate.state.collectAsState()
     val socket by app.socket.state.collectAsState()
     var category by remember { mutableStateOf<String?>(null) }
@@ -210,11 +209,6 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit, connectDashboard: 
     val paired = app.store.paired
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { AffiliateHeader("Welcome back, $userName", if (socket in setOf(ConnectionState.Online, ConnectionState.WaitingForPair)) "Your next opportunity is ready" else "Offline mode · cached tasks available") }
-        if (!Permissions.hasAffiliateRequired(context)) {
-            item { AffiliateEmpty("Permissions required", "Enable all requested permissions before opening or completing tasks.") }
-            item { Button(onClick = { Permissions.openAppSettings(context) }, modifier = Modifier.fillMaxWidth()) { Text("Enable Permission") } }
-            return@LazyColumn
-        }
         item { GradientHeroCard("Your next opportunity", available.firstOrNull()?.title ?: "Stay ready", available.firstOrNull()?.let { "Earn ${it.reward} coin" } ?: "New tasks will appear automatically") }
         if (!paired) item { ConnectDashboardTask(connectDashboard) }
         if (state.categories.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(state.categories) { item -> AssistChip(onClick = { category = item.categoryId }, label = { Text(item.name) }, leadingIcon = if (category == item.categoryId) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
