@@ -159,7 +159,7 @@ fun AffiliateHome() {
     }) { padding -> Box(Modifier.padding(padding).fillMaxSize()) {
         Crossfade(targetState = openTask to tab, animationSpec = tween(220), label = "affiliate-navigation") { (detail, destination) -> when {
             detail != null -> AffiliateTaskDetail(detail) { openTask = null }
-            destination == AffiliateTab.Tasks -> AffiliateTasks { openTask = it }
+            destination == AffiliateTab.Tasks -> AffiliateTasks(open = { openTask = it }, connectDashboard = { tab = AffiliateTab.Settings })
             destination == AffiliateTab.Activity -> AffiliateActivity()
             destination == AffiliateTab.Wallet -> AffiliateWallet()
             else -> AffiliateSettings()
@@ -195,7 +195,7 @@ private fun PremiumCard(modifier: Modifier = Modifier, content: @Composable () -
 }
 
 @Composable
-private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit) {
+private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit, connectDashboard: () -> Unit) {
     val app = OwnerLinkApp.instance
     val state by app.affiliate.state.collectAsState()
     val socket by app.socket.state.collectAsState()
@@ -203,18 +203,38 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit) {
     val submitted = state.submissions.associateBy { it.taskId }
     val rawAvailable = state.tasks.filter { it.status == "PUBLISHED" && submitted[it.taskId] == null }
     val available = rawAvailable.filter { category == null || it.categoryId == category }
-    val progress = state.tasks.filter { submitted[it.taskId]?.status in setOf("QUEUED", "SENDING", "IN_PROGRESS", "REVISION_REQUESTED") }
-    val pending = state.tasks.filter { submitted[it.taskId]?.status == "PENDING_REVIEW" }
+    val accountState by app.affiliateAccount.state.collectAsState()
+    val userName = (accountState as? AffiliateAuthState.SignedIn)?.profile?.fullName ?: app.store.friendlyName.ifBlank { "Affiliate User" }
+    val paired = app.store.paired
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        item { AffiliateHeader("Affiliate", if (socket in setOf(ConnectionState.Online, ConnectionState.WaitingForPair)) "Fresh opportunities, synced securely" else "Offline mode · cached tasks available") }
+        item { AffiliateHeader("Welcome back, $userName", if (socket in setOf(ConnectionState.Online, ConnectionState.WaitingForPair)) "Your next opportunity is ready" else "Offline mode · cached tasks available") }
         item { GradientHeroCard("Your next opportunity", available.firstOrNull()?.title ?: "Stay ready", available.firstOrNull()?.let { "Earn ${it.reward} coin" } ?: "New tasks will appear automatically") }
+        if (!paired) item { ConnectDashboardTask(connectDashboard) }
         if (state.categories.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(state.categories) { item -> AssistChip(onClick = { category = item.categoryId }, label = { Text(item.name) }, leadingIcon = if (category == item.categoryId) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
         if (state.loading) item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         if (!state.loading && state.tasks.isEmpty()) item { AffiliateEmpty("No tasks available", "Published tasks will appear here. Cached tasks remain visible offline.") }
         if (available.isNotEmpty()) { item { SectionLabel("Available tasks") }; items(available, key = { "available-${it.taskId}" }) { TaskCard(it, null, open) } }
-        if (progress.isNotEmpty()) { item { SectionLabel("In Progress") }; items(progress, key = { "progress-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
-        if (pending.isNotEmpty()) { item { SectionLabel("Pending Review") }; items(pending, key = { "pending-${it.taskId}" }) { TaskCard(it, submitted[it.taskId], open) } }
         item { Spacer(Modifier.height(20.dp)) }
+    }
+}
+
+@Composable
+private fun ConnectDashboardTask(open: () -> Unit) {
+    val pulse = rememberInfiniteTransition(label = "dashboard-task-pulse")
+    val glow by pulse.animateFloat(0.12f, 0.28f, infiniteRepeatable(tween(1100), RepeatMode.Reverse), label = "dashboard-task-glow")
+    Card(
+        Modifier.fillMaxWidth().border(1.dp, Color(0xFF52D6A2).copy(alpha = .42f), RoundedCornerShape(28.dp)).clickable(onClick = open),
+        shape = RoundedCornerShape(28.dp), elevation = CardDefaults.cardElevation(5.dp),
+    ) {
+        Column(Modifier.background(Brush.linearGradient(listOf(Color(0xFF52D6A2).copy(alpha = glow), MaterialTheme.colorScheme.surface))).padding(20.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(54.dp).background(Color(0xFF169B70), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.QrCode2, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
+                Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f)) { Text("ONE-TIME REWARD", style = MaterialTheme.typography.labelSmall, color = Color(0xFF169B70), fontWeight = FontWeight.Bold); Text("Connect Dashboard", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold) }
+                Column(horizontalAlignment = Alignment.End) { Text("+50", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF169B70)); Text("COINS", style = MaterialTheme.typography.labelSmall) }
+            }
+            Text("Securely pair this phone with your dashboard. The reward is credited by the server after the first successful connection.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Button(onClick = open, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Rounded.QrCode2, null); Spacer(Modifier.width(8.dp)); Text("Connect & Earn 50 Coins", fontWeight = FontWeight.Bold) }
+        }
     }
 }
 
@@ -340,6 +360,8 @@ internal fun DynamicField(field: TaskField, value: Any?, update: (Any?) -> Unit,
 internal fun AffiliateActivity() {
     val state by OwnerLinkApp.instance.affiliate.state.collectAsState()
     val counts = AffiliatePresentationRules.activityCounts(state.submissions)
+    val waiting = state.submissions.filter { it.status in setOf("QUEUED", "SENDING", "IN_PROGRESS", "PENDING_REVIEW", "REVISION_REQUESTED") }
+    val history = state.submissions.filterNot { it in waiting }
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         item { AffiliateHeader("Activity", "Submission and review timeline") }
         item {
@@ -354,21 +376,23 @@ internal fun AffiliateActivity() {
                 AnimatedStatCard("Needs revision", counts.revision, Color(0xFF8D7CFF))
             }
         }
+        if (waiting.isNotEmpty()) { item { SectionLabel("Pending & review") }; items(waiting, key = { "waiting-${it.clientSubmissionId}" }) { item -> ActivitySubmissionCard(item, state.tasks.firstOrNull { it.taskId == item.taskId }?.title) } }
         item { SectionLabel("Recent activity") }
         if (state.submissions.isEmpty()) item { AffiliateEmpty("No activity yet", "Your queued, submitted, reviewed, and rewarded work will appear here.") }
-        items(state.submissions, key = { it.clientSubmissionId }) { item ->
-            val task = state.tasks.firstOrNull { it.taskId == item.taskId }
-            PremiumCard(Modifier.fillMaxWidth().animateContentSize()) { Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(44.dp).background(statusColor(item.status).copy(alpha = .18f), CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.History, null, tint = statusColor(item.status)) }
-                Spacer(Modifier.size(12.dp)); Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(task?.title ?: item.taskId, style = MaterialTheme.typography.titleMedium)
-                    StatusChip(item.status)
-                    item.reviewReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-                    Text(DateFormat.getDateTimeInstance().format(Date(item.updatedAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                }
-            } }
-        }
+        items(history, key = { "history-${it.clientSubmissionId}" }) { item -> ActivitySubmissionCard(item, state.tasks.firstOrNull { it.taskId == item.taskId }?.title) }
     }
+}
+
+@Composable private fun ActivitySubmissionCard(item: AffiliateSubmissionItem, taskTitle: String?) {
+    PremiumCard(Modifier.fillMaxWidth().animateContentSize()) { Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).background(statusColor(item.status).copy(alpha = .18f), CircleShape), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.History, null, tint = statusColor(item.status)) }
+        Spacer(Modifier.size(12.dp)); Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(taskTitle ?: item.taskId, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+            StatusChip(item.status)
+            item.reviewReason?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+            Text(DateFormat.getDateTimeInstance().format(Date(item.updatedAt)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    } }
 }
 
 @Composable private fun RowScope.AnimatedStatCard(label: String, target: Int, color: Color) {
@@ -437,7 +461,8 @@ internal fun AffiliateSettings() {
     }
     if (showProfile && accountProfile != null) { AffiliateProfileScreen(accountProfile) { showProfile = false }; return }
     Column(Modifier.fillMaxSize().padding(horizontal = 16.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        AffiliateHeader("Settings", "Personal, private, and uncomplicated")
+        Text("Settings", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.ExtraBold, modifier = Modifier.padding(top = 22.dp))
+        Text("Welcome, ${accountProfile?.fullName ?: app.store.friendlyName.ifBlank { "Affiliate User" }}", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
         SettingsTitle("Account"); PremiumCard(Modifier.fillMaxWidth().clickable { showProfile = true }) { Row(verticalAlignment = Alignment.CenterVertically) {
             if (avatar != null) Image(avatar!!.asImageBitmap(), "Profile avatar", Modifier.size(58.dp).clip(CircleShape)) else Box(Modifier.size(58.dp).background(MaterialTheme.colorScheme.primaryContainer, CircleShape), contentAlignment = Alignment.Center) { Text((accountProfile?.fullName ?: "A").take(1).uppercase(), style = MaterialTheme.typography.headlineMedium) }
             Spacer(Modifier.size(14.dp)); Column(Modifier.weight(1f)) { Text(accountProfile?.fullName ?: "Affiliate user", style = MaterialTheme.typography.titleLarge); Text("View or edit account", color = MaterialTheme.colorScheme.onSurfaceVariant) }

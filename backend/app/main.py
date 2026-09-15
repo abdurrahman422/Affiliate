@@ -1029,7 +1029,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if account:
                 bonus = affiliate.manual_adjust(
                     account["user_id"],
-                    "20",
+                    "50",
                     "Dashboard connection bonus",
                     "system",
                     idempotency_key=f"dashboard-connection-bonus:{account['user_id']}",
