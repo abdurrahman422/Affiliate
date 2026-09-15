@@ -2,8 +2,8 @@
 {% block title %}Users · Affiliate{% endblock %}
 {% block content %}
 <section class="page-head"><div><p class="eyebrow">WORKFORCE</p><h1>Users</h1><p>Registered Affiliate workers and server-authoritative account totals.</p></div></section>
-<section class="panel"><div class="table-wrap"><table><thead><tr><th>User</th><th>Phone</th><th>Education</th><th>Payout</th><th>Status</th><th>Tasks</th><th>Balance</th></tr></thead><tbody>
-{% for user in users %}<tr><td><a href="/users/{{ user.user_id }}"><strong>{{ user.full_name }}</strong></a><br><span class="muted">{{ user.user_id }}</span></td><td>{{ user.phone_number }}</td><td>{{ user.education }}</td><td>{{ user.withdrawal_method }} · {{ user.withdrawal_number_masked }}</td><td><span class="badge ok">{{ user.account_status }}</span></td><td>{{ user.task_count }} / {{ user.approved_count }} approved</td><td>{{ '%.3f'|format(user.balance_milli / 1000) }}</td></tr>
-{% else %}<tr><td colspan="7">No registered users yet.</td></tr>{% endfor %}
+<section class="panel"><div class="table-wrap"><table><thead><tr><th>User</th><th>Phone</th><th>Gender</th><th>Education</th><th>Payout</th><th>Status</th><th>Tasks</th><th>Balance</th></tr></thead><tbody>
+{% for user in users %}<tr><td><a href="/users/{{ user.user_id }}"><strong>{{ user.full_name }}</strong></a><br><span class="muted">{{ user.user_id }}</span></td><td>{{ user.phone_number }}</td><td>{{ user.gender|title if user.gender else 'Not set' }}</td><td>{{ user.education }}</td><td>{{ user.withdrawal_method }} · {{ user.withdrawal_number_masked }}</td><td><span class="badge ok">{{ user.account_status }}</span></td><td>{{ user.task_count }} / {{ user.approved_count }} approved</td><td>{{ '%.3f'|format(user.balance_milli / 1000) }}</td></tr>
+{% else %}<tr><td colspan="8">No registered users yet.</td></tr>{% endfor %}
 </tbody></table></div></section>
 {% endblock %}

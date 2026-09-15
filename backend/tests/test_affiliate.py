@@ -177,6 +177,8 @@ def test_eligibility_rules():
     assert eligible({"eligibility": {"type": "devices", "ids": ["d"]}}, "u", "d")
     assert not eligible({"eligibility": {"type": "devices", "ids": ["other"]}}, "u", "d")
     assert not eligible({"eligibility": {"type": "all", "minimum_quality_score": 90}}, "u", "d", 80)
+    assert eligible({"eligibility": {"type": "all", "gender": "FEMALE"}}, "u", "d", 100, set(), "FEMALE")
+    assert not eligible({"eligibility": {"type": "all", "gender": "FEMALE"}}, "u", "d", 100, set(), "MALE")
 
 
 def _published(service: AffiliateService, **overrides):

@@ -10,7 +10,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class AffiliateAccountTest {
-    private fun valid() = RegistrationDraft("Rahim Worker", "01712345678", "24", "Graduate", "Dhaka", "Mirpur Site", "bKash", "01812345678", "Secure123", "Secure123", "photo")
+    private fun valid() = RegistrationDraft("Rahim Worker", "01712345678", "24", "MALE", "Graduate", "Dhaka", "example.com", "bKash", "01812345678", "Secure123", "Secure123", "photo")
 
     @Test fun bangladeshPhoneNormalizationIsStrict() {
         assertEquals("+8801712345678", AffiliateAccountRules.normalizePhone("01712-345678"))

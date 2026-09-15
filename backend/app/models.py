@@ -46,6 +46,7 @@ class AffiliateUser(Base):
     phone_number: Mapped[str | None] = mapped_column(String(20), unique=True, nullable=True, index=True)
     password_hash: Mapped[str | None] = mapped_column(Text, nullable=True)
     age: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    gender: Mapped[str | None] = mapped_column(String(16), nullable=True, index=True)
     education: Mapped[str | None] = mapped_column(String(80), nullable=True)
     address: Mapped[str | None] = mapped_column(Text, nullable=True)
     site_address: Mapped[str | None] = mapped_column(Text, nullable=True)

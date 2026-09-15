@@ -23,13 +23,13 @@ import okhttp3.RequestBody.Companion.toRequestBody
 
 data class AffiliateProfile(
     val userId: String, val fullName: String, val phoneNumber: String, val age: Int,
-    val education: String, val address: String, val siteAddress: String,
+    val gender: String, val education: String, val address: String, val siteAddress: String,
     val withdrawalMethod: String, val withdrawalNumberMasked: String, val profilePhotoUrl: String? = null,
 )
 
 data class RegistrationDraft(
     val fullName: String = "", val phoneNumber: String = "", val age: String = "",
-    val education: String = "", val address: String = "", val siteAddress: String = "",
+    val gender: String = "", val education: String = "", val address: String = "", val siteAddress: String = "",
     val withdrawalMethod: String = "", val withdrawalNumber: String = "",
     val password: String = "", val confirmPassword: String = "",
     val profilePhotoBase64: String = "", val profilePhotoMime: String = "image/jpeg",
@@ -62,6 +62,7 @@ object AffiliateAccountRules {
         if (draft.fullName.trim().length !in 2..100) errors["fullName"] = "Enter your full name"
         if (normalizePhone(draft.phoneNumber) == null) errors["phone"] = "Enter a valid Bangladesh phone number"
         val age = draft.age.toIntOrNull(); if (age == null || age !in 13..100) errors["age"] = "Age must be between 13 and 100"
+        if (draft.gender !in setOf("MALE", "FEMALE")) errors["gender"] = "Choose Male or Female"
         if (draft.education !in setOf("SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other")) errors["education"] = "Choose your qualification"
         if (draft.address.trim().length < 3) errors["address"] = "Address is required"
         if (draft.siteAddress.isNotBlank() && normalizeSiteAddress(draft.siteAddress) == null) errors["siteAddress"] = "Enter a valid site address"
@@ -93,6 +94,7 @@ class AffiliateAccountController(
         if (errors.isNotEmpty()) { _message.value = errors.values.first(); return }
         request("/api/auth/register", "POST", buildJsonObject {
             put("full_name", draft.fullName.trim()); put("phone_number", draft.phoneNumber); put("age", draft.age.toInt())
+            put("gender", draft.gender)
             put("education", draft.education); put("address", draft.address.trim()); put("site_address", AffiliateAccountRules.normalizeSiteAddress(draft.siteAddress).orEmpty())
             put("withdrawal_method", draft.withdrawalMethod); put("withdrawal_number", draft.withdrawalNumber)
             put("password", draft.password); put("confirm_password", draft.confirmPassword)
@@ -163,7 +165,7 @@ class AffiliateAccountController(
         val value = Protocol.json.parseToJsonElement(raw) as JsonObject
         fun text(key: String) = value[key]?.jsonPrimitive?.contentOrNull.orEmpty()
         AffiliateProfile(text("user_id"), text("full_name"), text("phone_number"), value["age"]?.jsonPrimitive?.intOrNull ?: 0,
-            text("education"), text("address"), text("site_address"), text("withdrawal_method"), text("withdrawal_number_masked"),
+            text("gender"), text("education"), text("address"), text("site_address"), text("withdrawal_method"), text("withdrawal_number_masked"),
             value["profile_photo_url"]?.jsonPrimitive?.contentOrNull)
     }.getOrNull()
 }

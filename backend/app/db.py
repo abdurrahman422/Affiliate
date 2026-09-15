@@ -53,7 +53,7 @@ def init_db(engine: Engine) -> None:
     if engine.url.drivername.startswith("sqlite"):
         existing = {column["name"] for column in inspect(engine).get_columns("affiliate_users")}
         additions = {
-            "phone_number": "VARCHAR(20)", "password_hash": "TEXT", "age": "INTEGER",
+            "phone_number": "VARCHAR(20)", "password_hash": "TEXT", "age": "INTEGER", "gender": "VARCHAR(16)",
             "education": "VARCHAR(80)", "address": "TEXT", "site_address": "TEXT",
             "withdrawal_method": "VARCHAR(16)", "withdrawal_number": "VARCHAR(20)",
             "profile_photo_data": "TEXT", "profile_photo_mime": "VARCHAR(64)",

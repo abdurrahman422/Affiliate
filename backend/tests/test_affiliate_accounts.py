@@ -10,8 +10,8 @@ PHOTO = base64.b64encode(b"small-test-image").decode()
 
 def payload(**overrides):
     value = {
-        "full_name": "Rahim Worker", "phone_number": "01712345678", "age": 24,
-        "education": "Graduate", "address": "Dhaka, Bangladesh", "site_address": "Mirpur Site A",
+        "full_name": "Rahim Worker", "phone_number": "01712345678", "age": 24, "gender": "MALE",
+        "education": "Graduate", "address": "Dhaka, Bangladesh", "site_address": "example.com",
         "withdrawal_method": "bKash", "withdrawal_number": "01812345678",
         "password": "Secure123", "confirm_password": "Secure123",
         "profile_photo_base64": PHOTO, "profile_photo_mime": "image/jpeg", "device_id": "phone-a",
@@ -40,6 +40,7 @@ def test_duplicate_and_registration_validation(client):
     assert register(client).status_code == 200
     assert register(client).status_code == 409
     assert register(client, phone_number="123").json()["code"] == "INVALID_PHONE"
+    assert register(client, gender="OTHER").json()["code"] == "INVALID_GENDER"
     assert register(client, withdrawal_method="Rocket").json()["code"] == "INVALID_WITHDRAWAL_METHOD"
     assert register(client, withdrawal_number="123").json()["code"] == "INVALID_PHONE"
     assert register(client, password="weak", confirm_password="weak").json()["code"] == "WEAK_PASSWORD"
@@ -55,8 +56,9 @@ def test_login_session_profile_isolation_and_logout(client):
     headers = auth(login)
     assert client.get("/api/auth/session", headers=headers).status_code == 200
     assert client.get("/api/profile").status_code == 401
-    updated = client.put("/api/profile", headers=headers, json={"full_name": "Rahim Updated", "age": 25})
+    updated = client.put("/api/profile", headers=headers, json={"full_name": "Rahim Updated", "age": 25, "gender": "FEMALE"})
     assert updated.json()["profile"]["full_name"] == "Rahim Updated"
+    assert updated.json()["profile"]["gender"] == "FEMALE"
     other_id = second.json()["user_id"]
     assert client.get(f"/api/users/{other_id}/photo", headers=headers).status_code == 403
     assert client.post("/api/auth/logout", headers=headers).status_code == 200

@@ -246,12 +246,19 @@ def normalize_eligibility(value: Any) -> dict[str, Any]:
         result["ids"] = [str(value)[:128] for value in ids if str(value).strip()]
     if raw.get("minimum_quality_score") not in (None, ""):
         result["minimum_quality_score"] = max(0, min(100, int(raw["minimum_quality_score"])))
+    gender = str(raw.get("gender") or "ALL").strip().upper()
+    if gender not in {"ALL", "MALE", "FEMALE"}:
+        raise AffiliateError("Eligibility gender is invalid", "INVALID_ELIGIBILITY")
+    if gender != "ALL":
+        result["gender"] = gender
     return result
 
 
-def eligible(task: dict[str, Any], user_id: str, device_id: str, quality_score: int = 100, device_groups: set[str] | None = None) -> bool:
+def eligible(task: dict[str, Any], user_id: str, device_id: str, quality_score: int = 100, device_groups: set[str] | None = None, gender: str = "") -> bool:
     rule = task.get("eligibility") or {"type": "all"}
     if quality_score < int(rule.get("minimum_quality_score", 0)):
+        return False
+    if rule.get("gender") and str(gender).upper() != str(rule["gender"]).upper():
         return False
     kind, ids = rule.get("type", "all"), set(rule.get("ids") or [])
     return kind == "all" or (kind == "devices" and device_id in ids) or (kind == "users" and user_id in ids) or (kind == "groups" and bool(ids & (device_groups or set())))
@@ -622,7 +629,7 @@ class AffiliateService:
         submissions = self.submissions(user_id=user_id, device_id=device_id)
         submitted_task_ids = {row["task_id"] for row in submissions}
         candidates = [row for row in self.tasks() if row["status"] != "DRAFT"
-                      and eligible(row, user_id, device_id, int(user.get("quality_score", 100)), groups)]
+                      and eligible(row, user_id, device_id, int(user.get("quality_score", 100)), groups, str(user.get("gender") or ""))]
         next_by_sequence: dict[str, dict[str, Any]] = {}
         for row in candidates:
             sequence_id = row.get("sequence_id")
@@ -646,7 +653,7 @@ class AffiliateService:
         task = self.task(task_id)
         if task["status"] != "PUBLISHED": raise AffiliateError("Task is not accepting submissions", "TASK_NOT_OPEN", 409)
         user = self.ensure_user(user_id, device_id, "Affiliate worker")
-        if not eligible(task, user_id, device_id, int(user.get("quality_score", 100)), self._groups_for_device(device_id)):
+        if not eligible(task, user_id, device_id, int(user.get("quality_score", 100)), self._groups_for_device(device_id), str(user.get("gender") or "")):
             raise AffiliateError("This device is not eligible for the task", "NOT_ELIGIBLE", 403)
         sequence_id = task.get("sequence_id")
         if sequence_id:
@@ -921,6 +928,7 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
     @staticmethod
     def _user(row: AffiliateUser) -> dict[str, Any]:
         return {"user_id": row.user_id, "display_name": row.display_name, "device_id": row.device_id, "status": row.status,
+                "gender": row.gender or "",
                 "balance_milli": row.balance_milli, "quality_score": row.quality_score, "registered": row.registered,
                 "created_at": _dt(row.created_at), "updated_at": _dt(row.updated_at)}
 

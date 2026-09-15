@@ -80,7 +80,7 @@
       return value;
     });
     const eligibilityType = fd.get("eligibility_type");
-    const body = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), action_url: fd.get("action_url"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: taskType?.value === "URL" ? [] : fields, eligibility: { type: eligibilityType, ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
+    const body = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), action_url: fd.get("action_url"), campaign_id: fd.get("campaign_id"), template_id: fd.get("template_id"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), repeat_limit: fd.get("repeat_limit"), max_submissions: fd.get("max_submissions"), field_schema: taskType?.value === "URL" ? [] : fields, eligibility: { type: eligibilityType, gender: fd.get("eligibility_gender"), ids: String(fd.get("eligibility_ids") || "").split(",").map((x) => x.trim()).filter(Boolean), minimum_quality_score: fd.get("minimum_quality_score") || undefined } };
     try { await OwnerLink.api("/api/tasks", { method: "POST", body }); window.location.reload(); }
     catch (error) { out.textContent = error.message; }
   });

@@ -29,6 +29,7 @@ class UserDataFile(context: Context) {
                 appendLine("Name: ${safe(it["full_name"]?.jsonPrimitive?.content ?: "")}")
                 appendLine("User ID: ${safe(it["user_id"]?.jsonPrimitive?.content ?: "")}")
                 appendLine("Age: ${safe(it["age"]?.jsonPrimitive?.content ?: "")}")
+                appendLine("Gender: ${safe(it["gender"]?.jsonPrimitive?.content ?: "")}")
                 appendLine("Education: ${safe(it["education"]?.jsonPrimitive?.content ?: "")}")
                 appendLine("Account created: ${safe(it["created_at"]?.jsonPrimitive?.content ?: "")}")
                 appendLine("Withdrawal: ${safe(it["withdrawal_method"]?.jsonPrimitive?.content ?: "")} ${safe(it["withdrawal_number_masked"]?.jsonPrimitive?.content ?: "")}")

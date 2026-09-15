@@ -19,6 +19,7 @@ from .storage import RedisStore
 
 EDUCATION = {"SSC", "HSC", "Diploma", "Undergraduate", "Graduate", "Postgraduate", "Other"}
 WITHDRAWAL = {"bKash", "Nagad"}
+GENDERS = {"MALE", "FEMALE"}
 
 
 def normalize_site_address(value: Any) -> str:
@@ -46,6 +47,8 @@ def validate_registration(raw: dict[str, Any], require_photo: bool = True) -> di
     try: age = int(raw.get("age"))
     except (TypeError, ValueError): raise AffiliateError("Enter a valid age", "INVALID_AGE")
     if age < 13 or age > 100: raise AffiliateError("Age must be between 13 and 100", "INVALID_AGE")
+    gender = str(raw.get("gender") or "").strip().upper()
+    if gender not in GENDERS: raise AffiliateError("Choose Male or Female", "INVALID_GENDER")
     education = str(raw.get("education") or "").strip()
     if education not in EDUCATION: raise AffiliateError("Choose a valid educational qualification", "INVALID_EDUCATION")
     address, site = str(raw.get("address") or "").strip(), normalize_site_address(raw.get("site_address"))
@@ -62,7 +65,7 @@ def validate_registration(raw: dict[str, Any], require_photo: bool = True) -> di
     if raw.get("confirm_password") is not None and password != str(raw.get("confirm_password")):
         raise AffiliateError("Passwords do not match", "PASSWORD_MISMATCH")
     photo_data, photo_mime = _photo(raw.get("profile_photo_base64"), raw.get("profile_photo_mime"), require_photo)
-    return {"display_name": name, "phone_number": phone, "age": age, "education": education,
+    return {"display_name": name, "phone_number": phone, "age": age, "gender": gender, "education": education,
             "address": address, "site_address": site, "withdrawal_method": method,
             "withdrawal_number": withdrawal, "password_hash": hash_password(password),
             "profile_photo_data": photo_data, "profile_photo_mime": photo_mime}
@@ -104,7 +107,7 @@ class AffiliateAccountService:
             if int(created or 0) != 1: raise AffiliateError("An account already exists for this phone number", "PHONE_EXISTS", 409)
         else:
             row = AffiliateUser(user_id=user_id, display_name=values["display_name"], device_id=device_id,
-                phone_number=values["phone_number"], password_hash=values["password_hash"], age=values["age"],
+                phone_number=values["phone_number"], password_hash=values["password_hash"], age=values["age"], gender=values["gender"],
                 education=values["education"], address=values["address"], site_address=values["site_address"],
                 withdrawal_method=values["withdrawal_method"], withdrawal_number=values["withdrawal_number"],
                 profile_photo_data=values["profile_photo_data"], profile_photo_mime=values["profile_photo_mime"], registered=True)
@@ -156,6 +159,10 @@ class AffiliateAccountService:
             except (TypeError, ValueError): raise AffiliateError("Enter a valid age", "INVALID_AGE")
             if not 13 <= age <= 100: raise AffiliateError("Age must be between 13 and 100", "INVALID_AGE")
             patch["age"] = age
+        if "gender" in raw:
+            gender = str(raw["gender"]).strip().upper()
+            if gender not in GENDERS: raise AffiliateError("Choose Male or Female", "INVALID_GENDER")
+            patch["gender"] = gender
         for api, field, options, limit in (("education", "education", EDUCATION, 80), ("withdrawal_method", "withdrawal_method", WITHDRAWAL, 16)):
             if api in raw:
                 value = str(raw[api]).strip()
@@ -249,7 +256,7 @@ class AffiliateAccountService:
     @staticmethod
     def public(value: dict[str, Any]) -> dict[str, Any]:
         return {"user_id": value["user_id"], "full_name": value.get("display_name", ""), "phone_number": value.get("phone_number", ""),
-                "age": value.get("age"), "education": value.get("education", ""), "address": value.get("address", ""),
+                "age": value.get("age"), "gender": value.get("gender", ""), "education": value.get("education", ""), "address": value.get("address", ""),
                 "site_address": value.get("site_address", ""), "withdrawal_method": value.get("withdrawal_method", ""),
                 "withdrawal_number_masked": mask_phone(value.get("withdrawal_number")), "account_status": value.get("status", "ACTIVE"),
                 "profile_photo_url": f"/api/users/{value['user_id']}/photo" if value.get("profile_photo_data") else None,
