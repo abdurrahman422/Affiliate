@@ -227,12 +227,9 @@ private fun ConnectDashboardTask(open: () -> Unit) {
     ) {
         Column(Modifier.background(Brush.linearGradient(listOf(Color(0xFF52D6A2).copy(alpha = glow), MaterialTheme.colorScheme.surface))).padding(20.dp), verticalArrangement = Arrangement.spacedBy(13.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Box(Modifier.size(54.dp).background(Color(0xFF169B70), RoundedCornerShape(18.dp)), contentAlignment = Alignment.Center) { Icon(Icons.Rounded.QrCode2, null, tint = Color.White, modifier = Modifier.size(28.dp)) }
-                Spacer(Modifier.width(13.dp)); Column(Modifier.weight(1f)) { Text("ONE-TIME REWARD", style = MaterialTheme.typography.labelSmall, color = Color(0xFF169B70), fontWeight = FontWeight.Bold); Text("Connect Dashboard", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold) }
-                Column(horizontalAlignment = Alignment.End) { Text("+50", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.ExtraBold, color = Color(0xFF169B70)); Text("COINS", style = MaterialTheme.typography.labelSmall) }
+                Column(Modifier.weight(1f)) { Text("ONE-TIME REWARD", style = MaterialTheme.typography.labelSmall, color = Color(0xFF169B70), fontWeight = FontWeight.Bold); Text("Redeem This Code", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold) }
             }
-            Text("Securely pair this phone with your dashboard. The reward is credited by the server after the first successful connection.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-            Button(onClick = open, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Icon(Icons.Rounded.QrCode2, null); Spacer(Modifier.width(8.dp)); Text("Connect & Earn 50 Coins", fontWeight = FontWeight.Bold) }
+            Button(onClick = open, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(16.dp)) { Text("Connect & Earn", fontWeight = FontWeight.Bold) }
         }
     }
 }

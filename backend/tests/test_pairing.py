@@ -49,6 +49,16 @@ def test_pair_adds_device_and_issues_session(client):
         assert auth["type"] == "AUTH_OK"
 
 
+def test_short_redeem_code_resolves_online_phone(client):
+    csrf = login(client)
+    device_id, code = new_device_id(), "Ab3dEf7hJk9mNp2rSt5wXy8z"
+    with client.websocket_connect("/ws/device") as ws:
+        unpaired_hello(ws, device_id, code, "Redeem Phone")
+        response = client.post("/api/devices/pair", json={"redeem_code": code, "name": "Redeem Phone"}, headers={"X-CSRF-Token": csrf})
+        assert response.status_code == 200, response.text
+        assert ws.receive_json()["type"] == "PAIR_SUCCESS"
+
+
 def test_pairing_token_cannot_be_reused(client):
     csrf = login(client)
     device_id = new_device_id()
