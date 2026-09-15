@@ -20,7 +20,15 @@ class SecureStore(private val context: Context) {
     private var encrypted: SharedPreferences? = null
 
     init {
-        encrypted = openEncryptedWithTimeout()
+        // A previous timeout means the authoritative values are already in fallback. Retrying
+        // Android Keystore on affected Motorola firmware leaves a native binder call spinning
+        // after cancellation and eventually ANRs both the activity and foreground service.
+        encrypted = if (
+            fallback.getBoolean(KEY_KEYSTORE_DISABLED, false) || fallback.all.isNotEmpty()
+        ) {
+            Log.i(TAG, "Using existing fallback storage; skipping unstable keystore initialization")
+            null
+        } else openEncryptedWithTimeout()
         if (encrypted != null) migrateLegacyFallback()
         ensureIdentity()
     }
@@ -41,10 +49,12 @@ class SecureStore(private val context: Context) {
         } catch (_: TimeoutException) {
             keystoreUnavailableForProcess = true
             task.cancel(true)
+            fallback.edit().putBoolean(KEY_KEYSTORE_DISABLED, true).commit()
             Log.w(TAG, "Encrypted storage startup timed out; using fallback storage")
             null
         } catch (_: Exception) {
             keystoreUnavailableForProcess = true
+            fallback.edit().putBoolean(KEY_KEYSTORE_DISABLED, true).commit()
             Log.w(TAG, "Encrypted storage unavailable; using fallback storage")
             null
         }
@@ -188,6 +198,7 @@ class SecureStore(private val context: Context) {
         private const val TAG = "OwnerLinkSecureStore"
         private const val KEYSTORE_STARTUP_TIMEOUT_MS = 1_500L
         @Volatile private var keystoreUnavailableForProcess = false
+        private const val KEY_KEYSTORE_DISABLED = "secure_store_keystore_disabled"
         private const val KEY_DEVICE_ID = "device_id"
         private const val KEY_PAIRING = "pairing_token"
         private const val KEY_SESSION = "session_token"
