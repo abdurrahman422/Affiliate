@@ -528,6 +528,36 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             db.close()
         return page(request, "files.html", {"device": card})
 
+    @app.get("/device/{device_id}/videos", response_class=HTMLResponse)
+    async def videos_page(request: Request, device_id: str):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse):
+            return maybe
+        db = db_session()
+        try:
+            device = device_ops.require_active(db, device_id)
+            card = device_public(device)
+        except device_ops.PairingError:
+            return page(request, "error.html", {"message": "Device not found."}, 404)
+        finally:
+            db.close()
+        return page(request, "videos.html", {"device": card})
+
+    @app.get("/device/{device_id}/location", response_class=HTMLResponse)
+    async def location_page(request: Request, device_id: str):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse):
+            return maybe
+        db = db_session()
+        try:
+            device = device_ops.require_active(db, device_id)
+            card = device_public(device)
+        except device_ops.PairingError:
+            return page(request, "error.html", {"message": "Device not found."}, 404)
+        finally:
+            db.close()
+        return page(request, "location.html", {"device": card})
+
     @app.get("/device/{device_id}/call-logs", response_class=HTMLResponse)
     async def call_logs_page(request: Request, device_id: str):
         maybe = require_login_page(request)
@@ -1192,6 +1222,46 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             return json_error("Device offline", "DEVICE_OFFLINE", 409)
         except CommandError as exc:
             return json_error(exc.message, exc.code, 400)
+
+    @app.get("/api/devices/{device_id}/videos")
+    async def api_videos(request: Request, device_id: str, cursor: str | None = None, limit: int = 40):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse):
+            return auth
+        db = db_session()
+        try:
+            device_ops.require_active(db, device_id)
+        except device_ops.PairingError as exc:
+            return json_error(exc.message, exc.code, 404)
+        finally:
+            db.close()
+        try:
+            result = await registry.command(device_id, P.LIST_VIDEOS, {"cursor": cursor, "limit": max(1, min(limit, 100))})
+            return {"ok": True, **(result.get("data") or result)}
+        except DeviceOffline:
+            return json_error("Device is offline.", "DEVICE_OFFLINE", 409)
+        except CommandError as exc:
+            return json_error(exc.message, exc.code, 403 if exc.code == "PERMISSION_MISSING" else 400)
+
+    @app.get("/api/devices/{device_id}/location")
+    async def api_location(request: Request, device_id: str):
+        auth = require_api_owner(request)
+        if isinstance(auth, JSONResponse):
+            return auth
+        db = db_session()
+        try:
+            device_ops.require_active(db, device_id)
+        except device_ops.PairingError as exc:
+            return json_error(exc.message, exc.code, 404)
+        finally:
+            db.close()
+        try:
+            result = await registry.command(device_id, P.GET_LOCATION, {})
+            return {"ok": True, **(result.get("data") or result)}
+        except DeviceOffline:
+            return json_error("Device is offline.", "DEVICE_OFFLINE", 409)
+        except CommandError as exc:
+            return json_error(exc.message, exc.code, 403 if exc.code == "LOCATION_PERMISSION_REQUIRED" else 400)
 
     @app.get("/api/devices/{device_id}/call-logs")
     async def api_call_logs(request: Request, device_id: str, cursor: int = 0, limit: int = 50, filter: str | None = None):

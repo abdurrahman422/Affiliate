@@ -16,6 +16,42 @@ import kotlinx.serialization.json.put
 import java.io.ByteArrayOutputStream
 
 class GalleryRepository(private val context: Context) {
+    fun listVideos(cursor: String?, limit: Int): JsonObject {
+        if (!Permissions.hasMedia(context)) return buildJsonObject {
+            put("ok", false); put("code", "PERMISSION_MISSING")
+            put("message", "Video permission is not granted on the phone.")
+        }
+        val items = ArrayList<JsonObject>()
+        val uri = MediaStore.Video.Media.EXTERNAL_CONTENT_URI
+        val projection = arrayOf(
+            MediaStore.Video.Media._ID, MediaStore.Video.Media.DISPLAY_NAME,
+            MediaStore.Video.Media.MIME_TYPE, MediaStore.Video.Media.SIZE,
+            MediaStore.Video.Media.WIDTH, MediaStore.Video.Media.HEIGHT,
+            MediaStore.Video.Media.DATE_ADDED, MediaStore.Video.Media.DURATION,
+        )
+        val after = cursor?.toLongOrNull()
+        val selection = after?.let { "${MediaStore.Video.Media._ID} < ?" }
+        val args = after?.let { arrayOf(it.toString()) }
+        context.contentResolver.query(uri, projection, selection, args, "${MediaStore.Video.Media._ID} DESC")?.use { c ->
+            while (c.moveToNext() && items.size < limit.coerceIn(1, 100)) {
+                val id = c.getLong(0)
+                items += buildJsonObject {
+                    put("id", FileIds.encodeGallery(id)); put("name", c.getString(1) ?: "video")
+                    put("mime", c.getString(2) ?: "video/*"); put("size", c.getLong(3))
+                    put("width", c.getInt(4)); put("height", c.getInt(5))
+                    put("taken_at", c.getLong(6)); put("duration_ms", c.getLong(7)); put("is_video", true)
+                }
+            }
+        }
+        val next = items.lastOrNull()?.get("id")?.jsonPrimitive?.content?.let {
+            (FileIds.decode(it) as com.ownerlink.agent.files.FileRef.Gallery).mediaId.toString()
+        }
+        return buildJsonObject {
+            put("items", JsonArray(items)); put("has_more", items.size >= limit.coerceIn(1, 100))
+            if (items.size >= limit.coerceIn(1, 100) && next != null) put("cursor", next)
+        }
+    }
+
     fun list(cursor: String?, limit: Int): JsonObject {
         if (!Permissions.hasMedia(context)) {
             return buildJsonObject {
@@ -137,5 +173,4 @@ class GalleryRepository(private val context: Context) {
         return null
     }
 }
-
 

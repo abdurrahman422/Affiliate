@@ -25,6 +25,8 @@ object Protocol {
     const val REVOKED = "REVOKED"
     const val UNPAIRED_ACK = "UNPAIRED_ACK"
     const val LIST_GALLERY = "LIST_GALLERY"
+    const val LIST_VIDEOS = "LIST_VIDEOS"
+    const val GET_LOCATION = "GET_LOCATION"
     const val LIST_FILES = "LIST_FILES"
     const val LIST_CALL_LOGS = "LIST_CALL_LOGS"
     const val DOWNLOAD_FILE = "DOWNLOAD_FILE"

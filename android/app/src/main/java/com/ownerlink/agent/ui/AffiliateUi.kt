@@ -67,6 +67,8 @@ import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.PlayCircle
 import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Stars
+import androidx.compose.material.icons.rounded.LocationOn
+import androidx.compose.material.icons.rounded.BatterySaver
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -450,6 +452,10 @@ internal fun AffiliateSettings() {
     var showProfile by remember { mutableStateOf(false) }
     var dashboardGeneration by remember { mutableStateOf(0) }
     val haptic = LocalHapticFeedback.current
+    val locationPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) {
+        Toast.makeText(context, "For background location, choose Allow all the time in Affiliate app permissions.", Toast.LENGTH_LONG).show()
+        context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+    }
     val accountState by app.affiliateAccount.state.collectAsState()
     val accountProfile = (accountState as? AffiliateAuthState.SignedIn)?.profile
     val avatar by produceState<android.graphics.Bitmap?>(null, app.store.profileUri) {
@@ -468,6 +474,18 @@ internal fun AffiliateSettings() {
         } }
         SettingsTitle("Text Downloader"); SettingsRow(Icons.Rounded.Download, "Download My Data", "Export your Affiliate activity as a TXT file") { if (app.affiliate.localData.file.isFile) exporter.launch("Affiliate-user-data.txt") else Toast.makeText(context, "No activity to export yet", Toast.LENGTH_SHORT).show() }
         SettingsTitle("Appearance"); PremiumCard(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { ThemeMode.entries.forEach { mode -> val text = if (mode == ThemeMode.SYSTEM) "System Default" else mode.name.lowercase().replaceFirstChar(Char::uppercase); if (appearance == mode) Button(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } else OutlinedButton(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } } } }
+        SettingsTitle("Background Access")
+        SettingsRow(Icons.Rounded.LocationOn, "Location Access", "Allow location, then select Allow all the time") {
+            if (androidx.core.content.ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_COARSE_LOCATION) != android.content.pm.PackageManager.PERMISSION_GRANTED) {
+                locationPermission.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+            } else {
+                context.startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
+            }
+        }
+        SettingsRow(Icons.Rounded.BatterySaver, "Keep Affiliate Running", "Remove battery restrictions for reliable background connection") {
+            runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))) }
+                .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {
             if (app.store.paired) { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Dashboard connected", style = MaterialTheme.typography.titleMedium); Text("Regenerate only when you want to replace the current dashboard connection.", color = MaterialTheme.colorScheme.onSurfaceVariant); OutlinedButton(onClick = { app.store.regeneratePairingToken(); app.socket.disconnect(false); app.socket.retryNow(); dashboardGeneration++ }) { Text("Regenerate Dashboard Code") } } } }

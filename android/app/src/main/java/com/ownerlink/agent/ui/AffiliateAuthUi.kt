@@ -133,6 +133,8 @@ private fun registrationStepFor(field: String): Int = when (field) {
     val callLog = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
     val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
+    val foregroundLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { next() }
+    val backgroundLocation = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         permissionStep = -1
         val granted = Permissions.hasAffiliateRequired(context)
@@ -146,7 +148,9 @@ private fun registrationStepFor(field: String): Int = when (field) {
             2 -> callLog.launch(Manifest.permission.READ_CALL_LOG)
             3 -> contacts.launch(Manifest.permission.READ_CONTACTS)
             4 -> camera.launch(Manifest.permission.CAMERA)
-            5 -> if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else {
+            5 -> foregroundLocation.launch(arrayOf(Manifest.permission.ACCESS_COARSE_LOCATION, Manifest.permission.ACCESS_FINE_LOCATION))
+            6 -> if (Build.VERSION.SDK_INT >= 29) backgroundLocation.launch(Manifest.permission.ACCESS_BACKGROUND_LOCATION) else next()
+            7 -> if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else {
                 permissionStep = -1
                 val granted = Permissions.hasAffiliateRequired(context)
                 app.store.permissionsSeen = granted

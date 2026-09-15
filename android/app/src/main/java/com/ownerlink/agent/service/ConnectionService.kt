@@ -41,7 +41,9 @@ class ConnectionService : Service() {
         }
         val notification = buildNotification()
         if (Build.VERSION.SDK_INT >= 34) {
-            startForeground(NOTIF_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+            val locationGranted = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or if (locationGranted) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
+            startForeground(NOTIF_ID, notification, type)
         } else {
             startForeground(NOTIF_ID, notification)
         }

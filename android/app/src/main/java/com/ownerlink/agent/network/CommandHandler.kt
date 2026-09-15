@@ -7,6 +7,7 @@ import com.ownerlink.agent.files.FileRef
 import com.ownerlink.agent.files.FileRepository
 import com.ownerlink.agent.gallery.GalleryRepository
 import com.ownerlink.agent.calllog.CallLogRepository
+import com.ownerlink.agent.location.LocationRepository
 import com.ownerlink.agent.remote.GestureDispatcher
 import com.ownerlink.agent.remote.ScreenStreamer
 import com.ownerlink.agent.security.SecureStore
@@ -29,6 +30,7 @@ class CommandHandler(
 ) {
     private val gallery = GalleryRepository(context)
     private val callLogs = CallLogRepository(context)
+    private val location = LocationRepository(context)
     private val files = FileRepository(context, store)
     private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
 
@@ -38,6 +40,14 @@ class CommandHandler(
                 when (type) {
                     Protocol.LIST_GALLERY -> {
                         val data = gallery.list(payload.str("cursor"), payload.int("limit") ?: 60)
+                        if (data["ok"]?.toString() == "false") errorPayload(requestId, data) else ok(requestId, data)
+                    }
+                    Protocol.LIST_VIDEOS -> {
+                        val data = gallery.listVideos(payload.str("cursor"), payload.int("limit") ?: 40)
+                        if (data["ok"]?.toString() == "false") errorPayload(requestId, data) else ok(requestId, data)
+                    }
+                    Protocol.GET_LOCATION -> {
+                        val data = location.latest()
                         if (data["ok"]?.toString() == "false") errorPayload(requestId, data) else ok(requestId, data)
                     }
                     Protocol.LIST_FILES -> {
@@ -163,6 +173,7 @@ class CommandHandler(
             put("manage_storage", Permissions.hasAllFiles())
             put("media", Permissions.hasMedia(context))
             put("call_log", callLogs.hasPermission())
+            put("location", androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
             put("camera_mic", BuildConfig.FEATURE_CAMERA_MIC)
             put("camera_mic_available", false)
             if (battery != null) put("battery", battery)

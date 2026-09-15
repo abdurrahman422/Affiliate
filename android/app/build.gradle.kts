@@ -24,8 +24,8 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 10
-        versionName = "2.3.4-affiliate"
+        versionCode = 11
+        versionName = "2.4.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "BASE_URL", "\"$affiliateBaseUrl\"")

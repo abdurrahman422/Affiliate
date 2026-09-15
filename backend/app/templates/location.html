@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block title %}Location — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <p class="crumb"><a href="/devices">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Location</p>
+  <h1>Location</h1><p class="muted">Requested from the phone with Android permission. It is not retained as location history.</p>
+</div></div>
+<article class="card"><button id="location-refresh" class="primary" type="button">Get latest location</button><p id="location-status" class="meta"></p><div id="location-result"></div></article>
+{% endblock %}
+{% block scripts %}<script>window.OWNERLINK_DEVICE_ID={{ device.device_id|tojson }};</script><script src="/static/js/location.js"></script>{% endblock %}

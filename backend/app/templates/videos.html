@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block title %}Videos — {{ device.name }}{% endblock %}
+{% block content %}
+<div class="page-head"><div>
+  <p class="crumb"><a href="/devices">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Videos</p>
+  <h1>Videos</h1>
+  <p class="muted">Videos stream from the phone and are not stored on this server.</p>
+</div></div>
+<p id="video-status" class="meta"></p>
+<div id="video-grid" class="media-grid"></div>
+<button id="video-more" class="hidden" type="button">Load more</button>
+<dialog id="video-preview">
+  <video id="video-player" controls playsinline style="max-width:min(900px,90vw);max-height:70vh"></video>
+  <div class="actions"><a id="video-download" class="primary" href="#">Download video</a><button id="video-close" type="button">Close</button></div>
+</dialog>
+{% endblock %}
+{% block scripts %}
+<script>window.OWNERLINK_DEVICE_ID={{ device.device_id|tojson }};</script>
+<script src="/static/js/videos.js"></script>
+{% endblock %}
