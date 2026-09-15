@@ -2,7 +2,7 @@
 {% block title %}Tasks — Affiliate{% endblock %}
 {% block content %}
 <div class="page-head"><div><h1>Tasks</h1><p class="muted">Build schema-driven work once and publish it to every eligible device.</p></div></div>
-<section class="card form-card"><div class="section-head"><div><h2>Import Task JSON</h2><p class="muted">Upload one validated JSON file to create its category and task automatically.</p></div><a class="button" href="/static/examples/affiliate-task-import.example.json" download>Download demo JSON</a></div>
+<section class="card form-card"><div class="section-head"><div><h2>Import Task JSON</h2><p class="muted">Upload one validated JSON file to create its category and task automatically.</p></div><div class="actions"><a class="button" href="/static/examples/affiliate-task-import.example.json" download>URL demo JSON</a><a class="button" href="/static/examples/affiliate-survey-import.example.json" download>Survey demo JSON</a></div></div>
 <form id="task-import-form" class="inline-fields"><label>JSON file<input id="task-json-file" type="file" accept="application/json,.json" required></label><button class="primary" type="submit">Import JSON</button><span id="task-import-result" class="meta" role="status"></span></form></section>
 <section class="card form-card"><div class="section-head"><div><h2>Categories</h2><p class="muted">Android receives enabled categories dynamically.</p></div></div>
 <form id="category-form" class="inline-fields"><label>Name<input name="name" maxlength="80" required></label><label>Description<input name="description" maxlength="2000"></label><button class="primary" type="submit">Create Category</button></form>

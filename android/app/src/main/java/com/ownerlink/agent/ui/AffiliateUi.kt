@@ -36,7 +36,11 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.Crossfade
 import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateIntAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.ui.draw.clip
@@ -242,8 +246,9 @@ private fun AffiliateTaskDetail(task: AffiliateTaskItem, back: () -> Unit) {
     val values = remember(task.taskId) { mutableStateMapOf<String, Any?>() }
     val errors = remember(task.taskId) { mutableStateMapOf<String, String>() }
     var review by remember { mutableStateOf(false) }
-    var actionStartedAt by rememberSaveable(task.taskId) { mutableStateOf<Long?>(null) }
-    val actionComplete = task.taskType != "URL" || actionStartedAt != null
+    var linkOpened by rememberSaveable(task.taskId) { mutableStateOf(false) }
+    var watchedConfirmed by rememberSaveable(task.taskId) { mutableStateOf(false) }
+    val actionComplete = task.taskType != "URL" || watchedConfirmed
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) { IconButton(onClick = back) { Icon(Icons.AutoMirrored.Rounded.ArrowBack, "Back") }; Column { Text(task.categoryId.replaceFirstChar(Char::uppercase), color = MaterialTheme.colorScheme.primary); Text(task.title, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold) } }
         Card(colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) { Row(Modifier.fillMaxWidth().padding(16.dp), horizontalArrangement = Arrangement.SpaceBetween) { Text("Reward"); Text("${task.reward} coin", fontWeight = FontWeight.Bold) } }
@@ -251,19 +256,40 @@ private fun AffiliateTaskDetail(task: AffiliateTaskItem, back: () -> Unit) {
         TaskStepCard("2", "Follow the instructions", task.instructions, Icons.AutoMirrored.Rounded.Assignment)
         if (task.taskType == "URL") Card(shape = RoundedCornerShape(24.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)) {
             Column(Modifier.fillMaxWidth().padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) { Text("3", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(10.dp)); Text("Open and complete", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
-                Text("Open the assigned link, complete the requested action, then return here to submit your response.")
-                Button(onClick = {
-                    task.actionUrl?.let { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onSuccess { if (actionStartedAt == null) actionStartedAt = System.currentTimeMillis() }.onFailure { Toast.makeText(context, "Unable to open this link", Toast.LENGTH_SHORT).show() } }
-                }, modifier = Modifier.fillMaxWidth()) { Icon(Icons.Rounded.OpenInNew, null); Spacer(Modifier.width(8.dp)); Text(if (actionStartedAt == null) "Open task link" else "Open link again") }
-                AnimatedContent(actionStartedAt != null, label = "task-link-state") { opened -> Text(if (opened) "Link opened ✓" else "Open the link to continue", color = if (opened) Color(0xFF2E9E68) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold) }
+                Row(verticalAlignment = Alignment.CenterVertically) { Box(Modifier.size(38.dp).background(MaterialTheme.colorScheme.primary, CircleShape), contentAlignment = Alignment.Center) { Text("3", color = MaterialTheme.colorScheme.onPrimary, fontWeight = FontWeight.Bold) }; Spacer(Modifier.width(10.dp)); Text("Watch and confirm", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) }
+                Text("Open the assigned video or web page. When you finish, return here and confirm that you watched it.")
+                WatchActionButton(linkOpened) {
+                    task.actionUrl?.let { url -> runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }.onSuccess { linkOpened = true }.onFailure { Toast.makeText(context, "Unable to open this link", Toast.LENGTH_SHORT).show() } }
+                }
+                AnimatedVisibility(linkOpened) {
+                    OutlinedButton(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); watchedConfirmed = true }, enabled = !watchedConfirmed, modifier = Modifier.fillMaxWidth().height(52.dp)) {
+                        Icon(Icons.Rounded.CloudDone, null); Spacer(Modifier.width(8.dp)); Text(if (watchedConfirmed) "Watched ✓" else "I Watched")
+                    }
+                }
+                AnimatedContent(watchedConfirmed, label = "task-watch-state") { confirmed -> Text(if (confirmed) "Watch confirmed — you can now complete the task ✓" else if (linkOpened) "Tap I Watched after finishing the video" else "Tap Let’s Watch to open the link", color = if (confirmed) Color(0xFF2E9E68) else MaterialTheme.colorScheme.onSurfaceVariant, fontWeight = FontWeight.SemiBold) }
             }
         }
         if (task.fields.isNotEmpty()) { HorizontalDivider(); Text(if (task.taskType == "URL") "Final response" else "3 · Your response", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold); task.fields.forEach { field -> DynamicField(field, values[field.id], { values[field.id] = it; errors.remove(field.id) }, errors[field.id]) } }
-        Button(onClick = { errors.clear(); errors.putAll(DynamicTaskValidator.validate(task.fields, values)); if (errors.isEmpty() && actionComplete) review = true }, enabled = actionComplete, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (task.taskType == "URL" && !actionComplete) "Open link to continue" else "Review and complete") }
+        Button(onClick = { errors.clear(); errors.putAll(DynamicTaskValidator.validate(task.fields, values)); if (errors.isEmpty() && actionComplete) review = true }, enabled = actionComplete, modifier = Modifier.fillMaxWidth().height(54.dp)) { Text(if (task.taskType == "URL" && !actionComplete) "Confirm I Watched first" else "Review and complete") }
         Text("Only the answers and proof files you explicitly choose are submitted. Other phone files are never scanned.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
     if (review) AlertDialog(onDismissRequest = { review = false }, title = { Text("Review before submitting") }, text = { Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) { Text(task.title, fontWeight = FontWeight.Bold); task.fields.filter { it.type != "note" && values[it.id] != null }.forEach { Text("${it.label}: ${displayValue(values[it.id])}") }; Text("After submission, this task will be Pending Review.") } }, confirmButton = { Button(onClick = { haptic.performHapticFeedback(HapticFeedbackType.LongPress); app.affiliate.submit(task, valuesToJson(values)); review = false; back() }) { Text("Submit task") } }, dismissButton = { TextButton(onClick = { review = false }) { Text("Go back") } })
+}
+
+@Composable
+private fun WatchActionButton(opened: Boolean, onClick: () -> Unit) {
+    val pulse = rememberInfiniteTransition(label = "watch-pulse")
+    val scale by pulse.animateFloat(
+        initialValue = 0.985f,
+        targetValue = 1.015f,
+        animationSpec = infiniteRepeatable(tween(900), RepeatMode.Reverse),
+        label = "watch-button-scale",
+    )
+    Button(onClick = onClick, modifier = Modifier.fillMaxWidth().height(56.dp).scale(scale)) {
+        Icon(if (opened) Icons.Rounded.OpenInNew else Icons.Rounded.PlayCircle, null)
+        Spacer(Modifier.width(9.dp))
+        Text(if (opened) "Watch Again" else "Let's Watch", fontWeight = FontWeight.Bold)
+    }
 }
 
 @Composable

@@ -35,7 +35,7 @@
   }));
   function fieldRow(value = {}) {
     const row = document.createElement("div"); row.className = "builder-row";
-    const id = document.createElement("input"); id.placeholder = "field_id"; id.value = value.id || ""; id.setAttribute("aria-label", "Field identifier");
+    const id = document.createElement("input"); id.placeholder = "Field ID (auto-generated)"; id.value = value.id || ""; id.setAttribute("aria-label", "Field identifier");
     const label = document.createElement("input"); label.placeholder = "User-facing label"; label.value = value.label || ""; label.setAttribute("aria-label", "Field label");
     const type = document.createElement("select"); type.setAttribute("aria-label", "Field type"); types.forEach((name) => { const option = document.createElement("option"); option.value = name; option.textContent = name.replaceAll("_", " "); option.selected = name === (value.type || "short_text"); type.appendChild(option); });
     const requiredLabel = document.createElement("label"); requiredLabel.className = "check-label"; const required = document.createElement("input"); required.type = "checkbox"; required.checked = !!value.required; requiredLabel.append(required, document.createTextNode("Required"));
@@ -70,7 +70,8 @@
     event.preventDefault(); const out = document.getElementById("task-result"); const fd = new FormData(form);
     const fields = [...builder.querySelectorAll(".builder-row")].map((row) => {
       const [id, label, type, required, choices, minimum, maximum, help] = row.querySelectorAll("input,select");
-      const value = { id: id.value.trim(), label: label.value.trim(), type: type.value, required: required.checked, help_text: help.value.trim() };
+      const generatedId = label.value.trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "").replace(/^[^a-z]+/, "").slice(0, 64);
+      const value = { id: id.value.trim() || generatedId || `question_${row.rowIndex || 1}`, label: label.value.trim(), type: type.value, required: required.checked, help_text: help.value.trim() };
       const options = choices.value.split(",").map((x) => x.trim()).filter(Boolean);
       if (["dropdown", "multi_select"].includes(type.value)) value.choices = options;
       if (["short_text", "long_text"].includes(type.value)) { if (minimum.value) value.min_length = Number(minimum.value); if (maximum.value) value.max_length = Number(maximum.value); }

@@ -181,6 +181,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     def page(request: Request, name: str, extra: dict | None = None, status_code: int = 200):
         return templates.TemplateResponse(request, name, ctx(request, extra), status_code=status_code)
 
+    def decorate_submission_answers(service: AffiliateService, rows: list[dict]) -> list[dict]:
+        """Resolve stored field IDs to the original administrator-authored question labels."""
+        task_map = {task["task_id"]: task for task in service.tasks()}
+        decorated: list[dict] = []
+        for source in rows:
+            row = dict(source)
+            schema = task_map.get(row.get("task_id"), {}).get("field_schema", [])
+            labels = {field.get("id"): field.get("label") for field in schema if isinstance(field, dict)}
+            row["display_answers"] = [
+                {"label": labels.get(key) or key.replace("_", " ").title(), "value": value}
+                for key, value in row.get("submitted_fields", {}).items()
+            ]
+            decorated.append(row)
+        return decorated
+
     def device_public(device, live: bool | None = None) -> dict[str, Any]:
         link = registry.get(device.device_id)
         online = registry.is_online(device.device_id) if live is None else live
@@ -362,7 +377,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         maybe = require_login_page(request)
         if isinstance(maybe, RedirectResponse): return maybe
         db = db_session()
-        try: rows = AffiliateService(db).submissions()
+        try:
+            service = AffiliateService(db)
+            rows = decorate_submission_answers(service, service.submissions())
         finally: db.close()
         return page(request, "submissions.html", {"submissions": rows, "review_only": False})
 
@@ -371,7 +388,9 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         maybe = require_login_page(request)
         if isinstance(maybe, RedirectResponse): return maybe
         db = db_session()
-        try: rows = AffiliateService(db).submissions(status="PENDING_REVIEW")
+        try:
+            service = AffiliateService(db)
+            rows = decorate_submission_answers(service, service.submissions(status="PENDING_REVIEW"))
         finally: db.close()
         return page(request, "submissions.html", {"submissions": rows, "review_only": True})
 

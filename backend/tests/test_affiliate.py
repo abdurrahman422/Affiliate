@@ -61,6 +61,56 @@ def test_admin_task_crud_lifecycle_and_dashboard(client):
     assert "Devices" in client.get("/devices").text
 
 
+def test_json_import_creates_form_fields_and_dashboard_displays_answers(client, app):
+    csrf = login(client)
+    payload = {
+        "version": 1,
+        "category": {"name": "Student Survey", "description": "Voluntary student survey"},
+        "task": {
+            "title": "Student information survey", "task_type": "FORM",
+            "description": "Three survey questions", "instructions": "Answer every question.",
+            "reward": "0.5", "repeat_limit": 1, "publish": True,
+            "response_fields": [
+                {"id": "full_name", "type": "short_text", "label": "Your name", "required": True},
+                {"id": "age", "type": "number", "label": "Your age", "required": True, "min": 5, "max": 120},
+                {"id": "current_class", "type": "short_text", "label": "Which class do you study in?", "required": True},
+            ],
+        },
+    }
+    imported = admin_post(client, "/api/tasks/import", payload, csrf)
+    assert imported.status_code == 200
+    task = imported.json()["task"]
+    assert task["status"] == "PUBLISHED" and task["task_type"] == "FORM"
+    assert [field["label"] for field in task["field_schema"]] == ["Your name", "Your age", "Which class do you study in?"]
+
+    with app.state.SessionLocal() as db:
+        submission = AffiliateService(db).submit(task["task_id"], uuid.uuid4().hex, "survey-user", "survey-phone", {
+            "full_name": "Test User", "age": 18, "current_class": "Class 12",
+        })
+        assert submission["submitted_fields"]["current_class"] == "Class 12"
+    rendered = client.get("/submissions")
+    assert rendered.status_code == 200
+    assert "Which class do you study in?" in rendered.text and "Class 12" in rendered.text
+
+
+def test_json_import_creates_url_task_without_duration_or_priority(client):
+    csrf = login(client)
+    imported = admin_post(client, "/api/tasks/import", {
+        "version": 1,
+        "category": {"name": "Video Watch", "description": "Public video tasks"},
+        "task": {
+            "title": "Watch the public video", "task_type": "URL",
+            "action_url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ",
+            "description": "Watch the assigned video", "instructions": "Open, watch, and confirm.",
+            "reward": "0.5", "publish": True, "duration": 500, "priority": 99,
+        },
+    }, csrf)
+    assert imported.status_code == 200
+    task = imported.json()["task"]
+    assert task["task_type"] == "URL" and task["action_url"].startswith("https://www.youtube.com/")
+    assert task["action_duration_seconds"] == 0 and task["priority"] == 0
+
+
 def test_campaign_lifecycle_and_auth(client):
     assert client.get("/api/campaigns").status_code == 401
     csrf = login(client)

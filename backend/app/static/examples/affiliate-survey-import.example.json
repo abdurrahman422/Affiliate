@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "category": {
+    "name": "Student Survey",
+    "description": "Simple surveys that collect answers entered voluntarily by Affiliate users."
+  },
+  "task": {
+    "title": "Student information survey",
+    "task_type": "FORM",
+    "description": "Answer three short questions about your current studies.",
+    "instructions": "Enter your name, age, and current class. Review your answers before submitting.",
+    "reward": "0.5",
+    "repeat_limit": 1,
+    "publish": true,
+    "response_fields": [
+      {
+        "id": "full_name",
+        "type": "short_text",
+        "label": "Your name",
+        "required": true,
+        "min_length": 2,
+        "max_length": 120
+      },
+      {
+        "id": "age",
+        "type": "number",
+        "label": "Your age",
+        "required": true,
+        "min": 5,
+        "max": 120
+      },
+      {
+        "id": "current_class",
+        "type": "short_text",
+        "label": "Which class do you study in?",
+        "required": true,
+        "max_length": 100
+      }
+    ]
+  }
+}
