@@ -545,6 +545,74 @@ class AffiliateService:
             self._audit("TASK_CREATED", "task", task_id, actor); self.db.commit()  # type: ignore[union-attr]
         return value
 
+    def import_published_sequence(self, rows: list[dict[str, Any]], actor: str) -> list[dict[str, Any]]:
+        """Validate and persist a complete link sequence with one Redis pipeline.
+
+        Production imports previously performed hundreds of REST round trips and could be cut off
+        by Render after only the first task. This path validates everything before writing, then
+        publishes the entire sequence atomically from the dashboard's point of view.
+        """
+        if not self.redis:
+            created: list[dict[str, Any]] = []
+            for raw in rows:
+                value = self.create_task(raw, actor)
+                created.append(self.task_status(value["task_id"], "PUBLISHED", actor))
+            return created
+        if not rows:
+            raise AffiliateError("A task sequence cannot be empty", "INVALID_IMPORT")
+        category_ids = {row["category_id"] for row in self.categories() if row.get("enabled", True)}
+        prepared: list[dict[str, Any]] = []
+        stamp = now_iso()
+        final_revision = int(self.db._cmd("INCRBY", self._key("version"), str(len(rows))))  # type: ignore[attr-defined]
+        first_revision = final_revision - len(rows) + 1
+        for offset, raw in enumerate(rows):
+            category_id = _safe_label(raw.get("category_id"), "Category", 64, True)
+            if category_id not in category_ids:
+                raise AffiliateError("Category is not enabled", "INVALID_CATEGORY")
+            if raw.get("campaign_id") or raw.get("template_id"):
+                raise AffiliateError("Imported sequences cannot use campaigns or templates", "INVALID_IMPORT")
+            fields = validate_field_schema(raw.get("field_schema") or raw.get("fields") or [])
+            reward = coins_to_milli(raw.get("reward", "0"))
+            if reward < 0:
+                raise AffiliateError("Task reward cannot be negative", "INVALID_REWARD")
+            repeat_limit = max(1, min(1000, int(raw.get("repeat_limit") or 1)))
+            max_submissions = raw.get("max_submissions")
+            max_submissions = max(1, int(max_submissions)) if max_submissions not in (None, "") else None
+            task_type, action_url, action_duration_seconds = normalize_task_action(raw)
+            sequence_id = str(raw.get("sequence_id") or "").strip()
+            sequence_order = int(raw.get("sequence_order") or 0)
+            if not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", sequence_id) or not (1 <= sequence_order <= 10_000):
+                raise AffiliateError("Task sequence is invalid", "INVALID_SEQUENCE")
+            task_id = str(uuid.uuid4())
+            prepared.append({
+                "task_id": task_id, "campaign_id": None, "template_id": None, "category_id": category_id,
+                "title": _safe_label(raw.get("title"), "Task title", 200, True),
+                "description": _safe_label(raw.get("description"), "Description", 5000),
+                "instructions": _safe_label(raw.get("instructions"), "Instructions", 10000, True),
+                "reward": milli_to_coins(reward), "status": "PUBLISHED", "task_type": task_type,
+                "action_url": action_url, "action_duration_seconds": action_duration_seconds,
+                "sequence_id": sequence_id, "sequence_order": sequence_order,
+                "priority": max(0, min(100, int(raw.get("priority") or 0))),
+                "start_at": raw.get("start_at") or None, "end_at": raw.get("end_at") or None,
+                "eligibility": normalize_eligibility(raw.get("eligibility")), "repeat_limit": repeat_limit,
+                "max_submissions": max_submissions, "field_schema": fields, "verification_mode": "MANUAL",
+                "created_by": actor, "revision": first_revision + offset, "created_at": stamp, "updated_at": stamp,
+            })
+        commands: list[list[str]] = []
+        for value in prepared:
+            commands.extend([
+                ["SET", self._key("task", value["task_id"]), json.dumps(value, separators=(",", ":"))],
+                ["SADD", self._key("task:ids"), value["task_id"]],
+            ])
+            event = {"event_id": str(uuid.uuid4()), "action": "TASK_PUBLISHED", "entity_type": "task",
+                     "entity_id": value["task_id"], "actor": actor, "detail": {"imported": True}, "created_at": stamp}
+            commands.extend([
+                ["SET", self._key("audit", event["event_id"]), json.dumps(event, separators=(",", ":"))],
+                ["SADD", self._key("audit:ids"), event["event_id"]],
+            ])
+        self.db._pipeline(commands)  # type: ignore[attr-defined]
+        return prepared
+
     def tasks(self, status: str | None = None, category: str | None = None) -> list[dict[str, Any]]:
         if self.redis: rows = self._rlist("task")
         else: rows = [self._task(row) for row in self.db.query(AffiliateTask).all()]  # type: ignore[union-attr]

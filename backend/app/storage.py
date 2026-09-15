@@ -53,6 +53,22 @@ class RedisStore:
         if result.get("error"): raise RuntimeError(f"Upstash Redis error: {result['error']}")
         return result.get("result")
 
+    def _pipeline(self, commands: list[list[str]]) -> list[Any]:
+        """Execute independent Redis commands in one Upstash HTTP round trip."""
+        if not commands:
+            return []
+        response = self.client.post(f"{self.url}/pipeline", json=commands)
+        response.raise_for_status()
+        rows = response.json()
+        if not isinstance(rows, list):
+            raise RuntimeError("Invalid Upstash pipeline response")
+        results: list[Any] = []
+        for row in rows:
+            if not isinstance(row, dict) or row.get("error"):
+                raise RuntimeError(f"Upstash Redis pipeline error: {(row or {}).get('error', 'invalid response')}")
+            results.append(row.get("result"))
+        return results
+
     def ping(self) -> bool: return self._cmd("PING") == "PONG"
     def _key(self, suffix: str) -> str: return f"{self.prefix}:{suffix}"
     def _get(self, key: str) -> dict | None:

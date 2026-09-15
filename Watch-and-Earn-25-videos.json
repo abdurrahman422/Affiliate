@@ -1,0 +1,46 @@
+{
+  "version": 1,
+  "category": {
+    "name": "Watch and Earn",
+    "description": "Watch engaging videos one by one, complete each viewing, and unlock the next earning opportunity. Only your currently unlocked video is shown."
+  },
+  "series": {
+    "name": "Watch Video"
+  },
+  "task_defaults": {
+    "task_type": "URL",
+    "title_prefix": "Watch Video",
+    "description": "A fresh video is ready for you. Watch it carefully, return to Affiliate, and confirm completion to unlock the next video.",
+    "instructions": "Tap Let's Watch to open the video. After watching, return to Affiliate, tap I Watched, and submit. Your next video will then unlock automatically.",
+    "reward": "0.5",
+    "repeat_limit": 1,
+    "publish": true
+  },
+  "tasks": [
+    { "action_url": "https://www.youtube.com/watch?v=YKwQVNuI3r0&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=26MbuGWa_Bo&t=2023s" },
+    { "action_url": "https://www.youtube.com/watch?v=oZDJi533d6M&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=-_ohq0xWoC8&t=593s&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=Ir6COTmjfl8&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=QWZYcHfCN6E&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=t7jRg-YDd4k&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=wuEq7rJk6OA&pp=ygUTaG93IHRvIHdvcmsgb25seWZhbg%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=KBcN8M0hLuc&pp=ygUEZm9vZA%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=hgdN-yyzS5E&pp=ygUEZm9vZA%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=Be4QeT2rG7c&pp=ygUEZm9vZA%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=Fc9KYhJNOqQ&pp=ygUEZm9vZA%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=_f7VY1IlaLA&pp=ygUHdHJhZGluZw%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=1cSivchwDXo&pp=ygUHdHJhZGluZw%3D%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=BjbeQYvLzhg&pp=ygUOYXJhYmlxIHRyYWRpbmc%3D" },
+    { "action_url": "https://www.youtube.com/watch?v=2qOuEj08CWs&pp=ygUGZHVtaXA7" },
+    { "action_url": "https://youtu.be/RPOdZ-ddkuQ?list=PLI_9XyEHZEKjKhC2Ik6FxtDRcexyae0jv" },
+    { "action_url": "https://www.youtube.com/watch?v=RPOdZ-ddkuQ&list=PLI_9XyEHZEKjKhC2Ik6FxtDRcexyae0jv&index=2&pp=iAQB" },
+    { "action_url": "https://www.youtube.com/watch?v=xtKYD5Wto7A&list=PLI_9XyEHZEKjKhC2Ik6FxtDRcexyae0jv&index=3&pp=iAQB" },
+    { "action_url": "https://www.youtube.com/watch?v=hiwCat7YCCo&list=PLI_9XyEHZEKjKhC2Ik6FxtDRcexyae0jv&index=4&pp=iAQB" },
+    { "action_url": "https://www.youtube.com/watch?v=cD9TqvYEVEI&list=PLI_9XyEHZEKjKhC2Ik6FxtDRcexyae0jv&index=5&pp=iAQB" },
+    { "action_url": "https://www.youtube.com/watch?v=GCGH8S2D9MA&pp=ygUMaG90IGFuZCBzZXh50gcJCSQMAYcqIYzv" },
+    { "action_url": "https://www.youtube.com/watch?v=0f3K3586XtE&pp=ygUMaG90IGFuZCBzZXh5" },
+    { "action_url": "https://www.youtube.com/watch?v=03KaRUSRgsk&pp=ygUMaG90IGFuZCBzZXh5" },
+    { "action_url": "https://www.youtube.com/shorts/lgvclyrxdTs" }
+  ]
+}

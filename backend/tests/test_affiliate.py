@@ -6,6 +6,7 @@ import pytest
 
 from app.affiliate import AffiliateError, AffiliateService, eligible, validate_field_schema, validate_submission
 from app.models import AffiliateAuditEvent, AffiliateUser
+from app.storage import RedisStore
 from tests.conftest import login, new_device_id, pairing_token, unpaired_hello
 from tests.test_chat_routing import connect_identity
 
@@ -146,6 +147,30 @@ def test_sequential_json_import_reveals_only_next_url_and_rejects_locked_submit(
         sequence_tasks = [task for task in second_sync["tasks"] if task.get("sequence_id") == tasks[0]["sequence_id"]]
         assert [task["action_url"] for task in sequence_tasks] == [urls[1]]
         assert urls[0] not in str(second_sync) and urls[2] not in str(second_sync)
+
+
+def test_redis_sequence_import_uses_one_bulk_pipeline():
+    db = RedisStore.__new__(RedisStore)
+    pipeline_calls = []
+    db._key = lambda suffix: f"ownerlink:v1:{suffix}"
+    db._cmd = lambda *parts: 3 if parts[0] == "INCRBY" else None
+    db._pipeline = lambda commands: pipeline_calls.append(commands) or ["OK"] * len(commands)
+    service = AffiliateService(db)
+    service.categories = lambda: [{"category_id": "watch", "name": "Watch", "enabled": True}]
+    rows = [{
+        "category_id": "watch", "title": f"Watch Video {index}", "task_type": "URL",
+        "action_url": f"https://www.youtube.com/watch?v=video_{index}",
+        "description": "Watch the assigned video", "instructions": "Watch and submit",
+        "reward": "0.5", "sequence_id": "sequence_test", "sequence_order": index,
+    } for index in range(1, 4)]
+
+    created = service.import_published_sequence(rows, "owner")
+
+    assert len(created) == 3
+    assert [task["revision"] for task in created] == [1, 2, 3]
+    assert all(task["status"] == "PUBLISHED" for task in created)
+    assert len(pipeline_calls) == 1
+    assert len(pipeline_calls[0]) == 12
 
 
 def test_campaign_lifecycle_and_auth(client):

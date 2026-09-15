@@ -810,6 +810,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             series = body.get("series") if isinstance(body.get("series"), dict) else {}
             sequence_id = uuid.uuid4().hex if is_sequence else None
             source_rows = task_rows if is_sequence else [task_raw]
+            prepared_rows: list[dict] = []
             for index, source in enumerate(source_rows, start=1):
                 if not isinstance(source, dict):
                     raise AffiliateError("Every sequence task must be an object", "INVALID_IMPORT")
@@ -825,10 +826,15 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 if sequence_id:
                     payload["sequence_id"], payload["sequence_order"] = sequence_id, index
                 publish = bool(payload.pop("publish", False)) or str(payload.pop("status", "")).upper() == "PUBLISHED"
-                value = service.create_task(payload, auth.username)
-                if publish:
-                    value = service.task_status(value["task_id"], "PUBLISHED", auth.username)
-                created_tasks.append(value)
+                if is_sequence and publish:
+                    prepared_rows.append(payload)
+                else:
+                    value = service.create_task(payload, auth.username)
+                    if publish:
+                        value = service.task_status(value["task_id"], "PUBLISHED", auth.username)
+                    created_tasks.append(value)
+            if prepared_rows:
+                created_tasks.extend(service.import_published_sequence(prepared_rows, auth.username))
         except (AffiliateError, TypeError, ValueError) as exc:
             for created in reversed(created_tasks):
                 try: AffiliateService(db).delete_task(created["task_id"], auth.username)
