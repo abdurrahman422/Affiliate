@@ -283,12 +283,17 @@ class AffiliateService:
         return self.db._get(self._key(kind, entity_id))  # type: ignore[attr-defined]
 
     def _rsave(self, kind: str, entity_id: str, value: dict[str, Any]) -> None:
-        self.db._set(self._key(kind, entity_id), value)  # type: ignore[attr-defined]
-        self.db._cmd("SADD", self._key(f"{kind}:ids"), entity_id)  # type: ignore[attr-defined]
+        self.db._pipeline([  # type: ignore[attr-defined]
+            ["SET", self._key(kind, entity_id), json.dumps(value, separators=(",", ":"))],
+            ["SADD", self._key(f"{kind}:ids"), entity_id],
+        ])
 
     def _rlist(self, kind: str) -> list[dict[str, Any]]:
         ids = self.db._cmd("SMEMBERS", self._key(f"{kind}:ids")) or []  # type: ignore[attr-defined]
-        return [item for item in (self._rget(kind, str(entity_id)) for entity_id in ids) if item]
+        if not ids:
+            return []
+        raw_rows = self.db._cmd("MGET", *(self._key(kind, str(entity_id)) for entity_id in ids)) or []  # type: ignore[attr-defined]
+        return [json.loads(raw) for raw in raw_rows if raw]
 
     def _version(self) -> int:
         if self.redis:
@@ -356,17 +361,21 @@ class AffiliateService:
         """One-time Affiliate redesign cleanup while preserving submissions and coin history."""
         if not self.redis:
             return
-        marker = self._key("catalog-cleanup", "simple-dashboard-v1")
-        if self.db._cmd("SET", marker, "1", "NX") is None:  # type: ignore[attr-defined]
+        marker = self._key("catalog-cleanup", "owner-requested-clean-slate-v2")
+        if self.db._cmd("GET", marker):  # type: ignore[attr-defined]
             return
+        cleanup_commands: list[list[str]] = []
         for kind in ("task", "template", "category"):
             for value in self._rlist(kind):
                 entity_id = str(value.get(f"{kind}_id") or "")
                 if entity_id:
-                    self.db._cmd("DEL", self._key(kind, entity_id))  # type: ignore[attr-defined]
-                    self.db._cmd("SREM", self._key(f"{kind}:ids"), entity_id)  # type: ignore[attr-defined]
+                    cleanup_commands.append(["DEL", self._key(kind, entity_id)])
+                    cleanup_commands.append(["SREM", self._key(f"{kind}:ids"), entity_id])
+        if cleanup_commands:
+            self.db._pipeline(cleanup_commands)  # type: ignore[attr-defined]
         self._next_version()
-        self._audit("CATALOG_CLEARED", "catalog", "simple-dashboard-v1", "system", {"history_preserved": True})
+        self._audit("CATALOG_CLEARED", "catalog", "owner-requested-clean-slate-v2", "system", {"history_preserved": True})
+        self.db._cmd("SET", marker, "1")  # type: ignore[attr-defined]
 
     @staticmethod
     def _seed_schema(name: str) -> list[dict[str, Any]]:

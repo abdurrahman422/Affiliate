@@ -16,9 +16,9 @@
   <label>Target<select name="eligibility_type"><option value="all">All active users</option><option value="devices">Selected devices</option><option value="users">Selected users</option></select></label>
   <label>Selected IDs<input name="eligibility_ids" placeholder="Comma-separated user or device IDs"></label>
   <div id="form-task-fields" class="wide" hidden><h3>Form questions</h3><p class="muted">Add one input box for each answer you need.</p><div id="field-builder" class="field-builder"></div></div>
-  <div class="wide actions"><button class="primary" type="submit">Create task</button><span id="task-result" class="meta" role="status"></span></div>
+  <div class="wide actions"><button id="create-task-button" class="primary" type="submit">Create task</button><span id="task-result" class="meta" role="status" aria-live="polite"></span></div>
 </form></section>
 <section class="section-head"><div><h2>Current tasks</h2><p class="muted">Edit, publish, pause, archive, or delete tasks.</p></div></section>
 <div class="card-list">{% for item in tasks %}<article class="card" data-task-id="{{ item.task_id }}"><div class="row"><div><p class="eyebrow">{{ item.category_id }} · {{ item.task_type }} · {{ item.reward }} coin</p><h2>{{ item.title }}</h2><p class="muted">{{ item.description }}</p></div><span class="pill status-{{ item.status|lower }}">{{ item.status }}</span></div><p>{{ item.instructions }}</p><div class="actions lifecycle"><button type="button" data-task-action="edit">Edit</button>{% for state in ['PUBLISHED','PAUSED','ARCHIVED'] %}<button type="button" data-status="{{ state }}">{{ state|title }}</button>{% endfor %}<button type="button" class="danger" data-task-action="delete">Delete</button></div></article>{% else %}<div class="card"><h2>No tasks yet</h2><p class="muted">Create a category first, then add your first task.</p></div>{% endfor %}</div>
 {% endblock %}
-{% block scripts %}<script>window.AFFILIATE_CATEGORIES={{ categories|tojson }};window.AFFILIATE_TASKS={{ tasks|tojson }};</script><script src="/static/js/tasks.js"></script>{% endblock %}
+{% block scripts %}<script>window.AFFILIATE_CATEGORIES={{ categories|tojson }};window.AFFILIATE_TASKS={{ tasks|tojson }};</script><script src="/static/js/tasks.js?v=tasks-3"></script>{% endblock %}
