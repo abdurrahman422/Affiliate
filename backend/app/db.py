@@ -73,6 +73,8 @@ def init_db(engine: Engine) -> None:
             "task_type": "VARCHAR(16) NOT NULL DEFAULT 'FORM'",
             "action_url": "TEXT",
             "action_duration_seconds": "INTEGER NOT NULL DEFAULT 0",
+            "sequence_id": "VARCHAR(64)",
+            "sequence_order": "INTEGER NOT NULL DEFAULT 0",
         }
         with engine.begin() as connection:
             for name, declaration in task_additions.items():

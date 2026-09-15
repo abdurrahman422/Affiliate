@@ -770,11 +770,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if isinstance(auth, JSONResponse): return auth
         if not isinstance(body, dict) or int(body.get("version") or 0) != 1:
             return json_error("Task JSON version must be 1", "INVALID_IMPORT")
-        category_raw, task_raw = body.get("category"), body.get("task")
-        if not isinstance(category_raw, dict) or not isinstance(task_raw, dict):
-            return json_error("Task JSON requires category and task objects", "INVALID_IMPORT")
+        category_raw = body.get("category")
+        task_raw, task_rows = body.get("task"), body.get("tasks")
+        is_sequence = isinstance(task_rows, list)
+        if not isinstance(category_raw, dict) or (not isinstance(task_raw, dict) and not is_sequence):
+            return json_error("Task JSON requires a category and either task or tasks", "INVALID_IMPORT")
+        if is_sequence and not (1 <= len(task_rows) <= 100):
+            return json_error("A task sequence must contain between 1 and 100 tasks", "INVALID_IMPORT")
         db = db_session()
         created_category = None
+        created_tasks: list[dict] = []
         try:
             service = AffiliateService(db)
             category_name = str(category_raw.get("name") or "").strip()
@@ -782,24 +787,42 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if category is None:
                 category = service.create_category(category_raw, auth.username)
                 created_category = category["category_id"]
-            payload = dict(task_raw)
-            payload["category_id"] = category["category_id"]
-            payload["field_schema"] = payload.pop("response_fields", payload.get("field_schema") or [])
-            payload.pop("priority", None)
-            payload.pop("action_duration_seconds", None)
-            publish = bool(payload.pop("publish", False)) or str(payload.pop("status", "")).upper() == "PUBLISHED"
-            value = service.create_task(payload, auth.username)
-            if publish:
-                value = service.task_status(value["task_id"], "PUBLISHED", auth.username)
+            defaults = body.get("task_defaults") if isinstance(body.get("task_defaults"), dict) else {}
+            series = body.get("series") if isinstance(body.get("series"), dict) else {}
+            sequence_id = uuid.uuid4().hex if is_sequence else None
+            source_rows = task_rows if is_sequence else [task_raw]
+            for index, source in enumerate(source_rows, start=1):
+                if not isinstance(source, dict):
+                    raise AffiliateError("Every sequence task must be an object", "INVALID_IMPORT")
+                payload = {**defaults, **source}
+                title_prefix = str(defaults.get("title_prefix") or series.get("name") or "Watch video").strip()
+                payload.setdefault("title", f"{title_prefix} {index}")
+                payload["category_id"] = category["category_id"]
+                payload["field_schema"] = payload.pop("response_fields", payload.get("field_schema") or [])
+                payload.pop("title_prefix", None)
+                payload.pop("priority", None)
+                payload.pop("duration", None)
+                payload.pop("action_duration_seconds", None)
+                if sequence_id:
+                    payload["sequence_id"], payload["sequence_order"] = sequence_id, index
+                publish = bool(payload.pop("publish", False)) or str(payload.pop("status", "")).upper() == "PUBLISHED"
+                value = service.create_task(payload, auth.username)
+                if publish:
+                    value = service.task_status(value["task_id"], "PUBLISHED", auth.username)
+                created_tasks.append(value)
         except (AffiliateError, TypeError, ValueError) as exc:
+            for created in reversed(created_tasks):
+                try: AffiliateService(db).delete_task(created["task_id"], auth.username)
+                except Exception: pass
             if created_category:
                 try: AffiliateService(db).delete_category(created_category, auth.username)
                 except Exception: pass
             if isinstance(exc, AffiliateError): return json_error(exc.message, exc.code, exc.status_code)
             return json_error("Task JSON contains invalid values", "INVALID_IMPORT")
         finally: db.close()
-        await broadcast_task_event(P.TASK_PUBLISHED if value["status"] == "PUBLISHED" else P.TASK_UPDATED, value)
-        return {"ok": True, "task": value, "category": category}
+        first = created_tasks[0]
+        await broadcast_task_event(P.TASK_PUBLISHED if first["status"] == "PUBLISHED" else P.TASK_UPDATED, first)
+        return {"ok": True, "task": first, "tasks": created_tasks, "sequence_id": sequence_id, "category": category}
 
     @app.put("/api/tasks/{task_id}")
     async def api_update_task(request: Request, task_id: str):

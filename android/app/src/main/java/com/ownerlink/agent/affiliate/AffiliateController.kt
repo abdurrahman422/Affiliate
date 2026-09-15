@@ -50,7 +50,9 @@ class AffiliateController(
             Protocol.TASK_SYNC -> applySync(payload)
             Protocol.TASK_SUBMISSION_ACK -> {
                 (payload["submission"] as? JsonObject)?.let { saveServerSubmission(it) }
-                requestSync()
+                // A successful submission can unlock the next server-held sequence item. Request
+                // a full snapshot so its older creation revision does not hide it behind cursor.
+                requestSync(forceFull = true)
             }
             Protocol.SUBMISSION_STATUS_CHANGED, Protocol.REVISION_REQUESTED, Protocol.COIN_CREDITED -> {
                 (payload["submission"] as? JsonObject)?.let { saveServerSubmission(it) }
@@ -65,9 +67,9 @@ class AffiliateController(
         }
     }
 
-    fun requestSync() {
+    fun requestSync(forceFull: Boolean = false) {
         scope.launch(Dispatchers.IO) {
-            val cursor = store.dao.cursor()?.toIntOrNull() ?: 0
+            val cursor = if (forceFull) 0 else store.dao.cursor()?.toIntOrNull() ?: 0
             sendServer(Protocol.envelope(Protocol.TASK_SYNC_REQUEST, deviceId, buildJsonObject { put("cursor", cursor); authToken()?.let { put("auth_token", it) } }))
             retryPending()
         }

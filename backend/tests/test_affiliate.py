@@ -111,6 +111,41 @@ def test_json_import_creates_url_task_without_duration_or_priority(client):
     assert task["action_duration_seconds"] == 0 and task["priority"] == 0
 
 
+def test_sequential_json_import_reveals_only_next_url_and_rejects_locked_submit(client, app):
+    csrf = login(client)
+    urls = [f"https://www.youtube.com/watch?v=private_video_{index}" for index in range(1, 4)]
+    imported = admin_post(client, "/api/tasks/import", {
+        "version": 1,
+        "category": {"name": "Private Video Sequence", "description": "One video at a time"},
+        "series": {"name": "Watch YouTube Video"},
+        "task_defaults": {
+            "task_type": "URL", "title_prefix": "Watch YouTube Video",
+            "description": "Watch the assigned video", "instructions": "Open, watch, confirm, and submit.",
+            "reward": "0.5", "publish": True,
+        },
+        "tasks": [{"action_url": url} for url in urls],
+    }, csrf)
+    assert imported.status_code == 200
+    tasks = imported.json()["tasks"]
+    assert len(tasks) == 3 and len({task["sequence_id"] for task in tasks}) == 1
+
+    with app.state.SessionLocal() as db:
+        service = AffiliateService(db)
+        first_sync = service.sync("sequence-user", "sequence-phone", "Sequence User", 0)
+        sequence_tasks = [task for task in first_sync["tasks"] if task.get("sequence_id") == tasks[0]["sequence_id"]]
+        assert [task["action_url"] for task in sequence_tasks] == [urls[0]]
+        assert urls[1] not in str(first_sync) and urls[2] not in str(first_sync)
+        with pytest.raises(AffiliateError) as locked:
+            service.submit(tasks[2]["task_id"], uuid.uuid4().hex, "sequence-user", "sequence-phone", {})
+        assert locked.value.code == "TASK_LOCKED"
+
+        service.submit(tasks[0]["task_id"], uuid.uuid4().hex, "sequence-user", "sequence-phone", {})
+        second_sync = service.sync("sequence-user", "sequence-phone", "Sequence User", 0)
+        sequence_tasks = [task for task in second_sync["tasks"] if task.get("sequence_id") == tasks[0]["sequence_id"]]
+        assert [task["action_url"] for task in sequence_tasks] == [urls[1]]
+        assert urls[0] not in str(second_sync) and urls[2] not in str(second_sync)
+
+
 def test_campaign_lifecycle_and_auth(client):
     assert client.get("/api/campaigns").status_code == 401
     csrf = login(client)

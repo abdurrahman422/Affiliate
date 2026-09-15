@@ -488,6 +488,14 @@ class AffiliateService:
         max_submissions = raw.get("max_submissions")
         max_submissions = max(1, int(max_submissions)) if max_submissions not in (None, "") else None
         task_type, action_url, action_duration_seconds = normalize_task_action(raw)
+        sequence_id = str(raw.get("sequence_id") or "").strip() or None
+        if sequence_id and not re.fullmatch(r"[A-Za-z0-9_-]{8,64}", sequence_id):
+            raise AffiliateError("Task sequence id is invalid", "INVALID_SEQUENCE")
+        sequence_order = int(raw.get("sequence_order") or 0)
+        if sequence_id and not (1 <= sequence_order <= 10_000):
+            raise AffiliateError("Task sequence order is invalid", "INVALID_SEQUENCE")
+        if not sequence_id:
+            sequence_order = 0
         category_id = _safe_label(raw.get("category_id"), "Category", 64, True)
         campaign_id, template_id = raw.get("campaign_id") or None, raw.get("template_id") or None
         if category_id not in {row["category_id"] for row in self.categories() if row.get("enabled", True)}: raise AffiliateError("Category is not enabled", "INVALID_CATEGORY")
@@ -498,6 +506,7 @@ class AffiliateService:
             "title": _safe_label(raw.get("title"), "Task title", 200, True), "description": _safe_label(raw.get("description"), "Description", 5000),
             "instructions": _safe_label(raw.get("instructions"), "Instructions", 10000, True), "reward": milli_to_coins(reward), "status": "DRAFT",
             "task_type": task_type, "action_url": action_url, "action_duration_seconds": action_duration_seconds,
+            "sequence_id": sequence_id, "sequence_order": sequence_order,
             "priority": max(0, min(100, int(raw.get("priority") or 0))), "start_at": raw.get("start_at") or None, "end_at": raw.get("end_at") or None,
             "eligibility": normalize_eligibility(raw.get("eligibility")), "repeat_limit": repeat_limit, "max_submissions": max_submissions,
             "field_schema": fields, "verification_mode": "MANUAL", "created_by": actor, "revision": revision, "created_at": stamp, "updated_at": stamp}
@@ -507,6 +516,7 @@ class AffiliateService:
             self.db.add(AffiliateTask(task_id=task_id, campaign_id=value["campaign_id"], template_id=value["template_id"], category_id=value["category_id"],
                 title=value["title"], description=value["description"], instructions=value["instructions"], reward_milli=reward, status="DRAFT",
                 task_type=task_type, action_url=action_url, action_duration_seconds=action_duration_seconds,
+                sequence_id=sequence_id, sequence_order=sequence_order,
                 priority=value["priority"], start_at=value["start_at"], end_at=value["end_at"], eligibility_json=json.dumps(value["eligibility"]),
                 repeat_limit=repeat_limit, max_submissions=max_submissions, field_schema_json=json.dumps(fields), verification_mode="MANUAL", created_by=actor, revision=revision))  # type: ignore[union-attr]
             self._audit("TASK_CREATED", "task", task_id, actor); self.db.commit()  # type: ignore[union-attr]
@@ -607,14 +617,26 @@ class AffiliateService:
     def sync(self, user_id: str, device_id: str, name: str, cursor: int = 0) -> dict[str, Any]:
         user = self.ensure_user(user_id, device_id, name)
         groups = self._groups_for_device(device_id)
-        current = self._version()
-        full = cursor <= 0 or cursor > current
-        task_rows = [row for row in self.tasks() if row["status"] != "DRAFT"
-                     and (full or int(row.get("revision", 0)) > cursor)
-                     and eligible(row, user_id, device_id, int(user.get("quality_score", 100)), groups)]
+        current_cursor = self._version()
+        full = cursor <= 0 or cursor > current_cursor
         submissions = self.submissions(user_id=user_id, device_id=device_id)
+        submitted_task_ids = {row["task_id"] for row in submissions}
+        candidates = [row for row in self.tasks() if row["status"] != "DRAFT"
+                      and eligible(row, user_id, device_id, int(user.get("quality_score", 100)), groups)]
+        next_by_sequence: dict[str, dict[str, Any]] = {}
+        for row in candidates:
+            sequence_id = row.get("sequence_id")
+            if not sequence_id or row["task_id"] in submitted_task_ids:
+                continue
+            current_task = next_by_sequence.get(sequence_id)
+            if current_task is None or int(row.get("sequence_order", 0)) < int(current_task.get("sequence_order", 0)):
+                next_by_sequence[sequence_id] = row
+        visible_ids = {row["task_id"] for row in candidates if not row.get("sequence_id")}
+        visible_ids.update(row["task_id"] for row in next_by_sequence.values())
+        task_rows = [row for row in candidates if row["task_id"] in visible_ids
+                     and (full or int(row.get("revision", 0)) > cursor)]
         ledger = self.ledger(user_id=user_id, limit=100)
-        return {"cursor": current, "categories": [row for row in self.categories() if row.get("enabled", True)], "tasks": task_rows, "submissions": submissions,
+        return {"cursor": current_cursor, "categories": [row for row in self.categories() if row.get("enabled", True)], "tasks": task_rows, "submissions": submissions,
                 "wallet": {"balance": milli_to_coins(int(user.get("balance_milli", 0))), "ledger": ledger},
                 "full": full}
 
@@ -626,6 +648,15 @@ class AffiliateService:
         user = self.ensure_user(user_id, device_id, "Affiliate worker")
         if not eligible(task, user_id, device_id, int(user.get("quality_score", 100)), self._groups_for_device(device_id)):
             raise AffiliateError("This device is not eligible for the task", "NOT_ELIGIBLE", 403)
+        sequence_id = task.get("sequence_id")
+        if sequence_id:
+            submitted_ids = {row["task_id"] for row in self.submissions(user_id=user_id, device_id=device_id)}
+            remaining = sorted(
+                (row for row in self.tasks(status="PUBLISHED") if row.get("sequence_id") == sequence_id and row["task_id"] not in submitted_ids),
+                key=lambda row: int(row.get("sequence_order", 0)),
+            )
+            if not remaining or remaining[0]["task_id"] != task_id:
+                raise AffiliateError("This sequence task is still locked", "TASK_LOCKED", 409)
         values, proofs = validate_submission(task["field_schema"], raw_values)
         existing = self._submission_by_client(client_submission_id)
         if existing: return existing
@@ -875,6 +906,7 @@ redis.call('SET',KEYS[1],ARGV[1]); redis.call('SET',KEYS[2],cjson.encode(s)); re
         return {"task_id": row.task_id, "campaign_id": row.campaign_id, "template_id": row.template_id, "category_id": row.category_id,
                 "title": row.title, "description": row.description, "instructions": row.instructions, "reward": milli_to_coins(row.reward_milli),
                 "task_type": row.task_type or "FORM", "action_url": row.action_url, "action_duration_seconds": row.action_duration_seconds or 0,
+                "sequence_id": row.sequence_id, "sequence_order": row.sequence_order or 0,
                 "status": row.status, "priority": row.priority, "start_at": row.start_at, "end_at": row.end_at,
                 "eligibility": json.loads(row.eligibility_json), "repeat_limit": row.repeat_limit, "max_submissions": row.max_submissions,
                 "field_schema": json.loads(row.field_schema_json), "verification_mode": row.verification_mode, "created_by": row.created_by,

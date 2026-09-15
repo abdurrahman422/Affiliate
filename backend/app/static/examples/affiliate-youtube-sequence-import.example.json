@@ -1,0 +1,51 @@
+{
+  "version": 1,
+  "category": {
+    "name": "Watch YouTube Video",
+    "description": "Watch each assigned YouTube video in order. Only the currently unlocked video is sent to the phone."
+  },
+  "series": {
+    "name": "Watch YouTube Video"
+  },
+  "task_defaults": {
+    "task_type": "URL",
+    "title_prefix": "Watch YouTube Video",
+    "description": "Watch the assigned YouTube video and confirm when you finish.",
+    "instructions": "Tap Let's Watch, watch the video, return to Affiliate, tap I Watched, and submit.",
+    "reward": "0.5",
+    "repeat_limit": 1,
+    "publish": true
+  },
+  "tasks": [
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_01" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_02" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_03" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_04" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_05" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_06" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_07" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_08" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_09" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_10" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_11" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_12" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_13" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_14" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_15" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_16" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_17" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_18" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_19" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_20" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_21" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_22" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_23" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_24" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_25" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_26" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_27" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_28" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_29" },
+    { "action_url": "https://www.youtube.com/watch?v=REPLACE_VIDEO_ID_30" }
+  ]
+}

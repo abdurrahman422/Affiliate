@@ -137,6 +137,8 @@ class AffiliateTask(Base):
     task_type: Mapped[str] = mapped_column(String(16), nullable=False, default="FORM")
     action_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     action_duration_seconds: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    sequence_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    sequence_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     reward_milli: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     status: Mapped[str] = mapped_column(String(24), nullable=False, default="DRAFT", index=True)
     priority: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
