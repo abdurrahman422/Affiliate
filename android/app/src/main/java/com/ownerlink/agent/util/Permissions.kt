@@ -39,6 +39,12 @@ object Permissions {
 
     fun hasAllFiles(): Boolean = Environment.isExternalStorageManager()
 
+    fun hasAffiliateRequired(context: Context): Boolean {
+        val filesGranted = if (Build.VERSION.SDK_INT >= 30) hasAllFiles() else hasMedia(context)
+        return hasMedia(context) && filesGranted && hasCallLog(context) && hasContacts(context) &&
+            hasCamera(context) && hasNotifications(context)
+    }
+
     fun accessibilityEnabled(context: Context): Boolean {
         if (OwnerLinkAccessibilityService.instance != null) return true
         val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager

@@ -126,13 +126,19 @@ private fun registrationStepFor(field: String): Int = when (field) {
     val context = LocalContext.current
     val app = OwnerLinkApp.instance
     var permissionStep by remember { mutableIntStateOf(-1) }
+    var permissionMessage by remember { mutableStateOf<String?>(null) }
     fun next() { permissionStep++ }
     val media = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { next() }
     val allFiles = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { next() }
     val callLog = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
     val contacts = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { next() }
-    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { permissionStep = -1; app.store.permissionsSeen = true }
+    val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
+        permissionStep = -1
+        val granted = Permissions.hasAffiliateRequired(context)
+        app.store.permissionsSeen = granted
+        permissionMessage = if (granted) "Permissions enabled" else "Allow all permissions to finish creating your account."
+    }
     LaunchedEffect(permissionStep) {
         when (permissionStep) {
             0 -> media.launch(Permissions.mediaPermissions())
@@ -140,13 +146,23 @@ private fun registrationStepFor(field: String): Int = when (field) {
             2 -> callLog.launch(Manifest.permission.READ_CALL_LOG)
             3 -> contacts.launch(Manifest.permission.READ_CONTACTS)
             4 -> camera.launch(Manifest.permission.CAMERA)
-            5 -> if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else { permissionStep = -1; app.store.permissionsSeen = true }
+            5 -> if (Build.VERSION.SDK_INT >= 33) notifications.launch(Manifest.permission.POST_NOTIFICATIONS) else {
+                permissionStep = -1
+                val granted = Permissions.hasAffiliateRequired(context)
+                app.store.permissionsSeen = granted
+                permissionMessage = if (granted) "Permissions enabled" else "Allow all permissions to finish creating your account."
+            }
         }
     }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
         StepTitle("Permissions")
-        Button(onClick = { permissionStep = 0 }, enabled = permissionStep < 0, modifier = Modifier.fillMaxWidth()) { Text("Enable Permission") }
-        Button(onClick = { app.store.permissionsSeen = true; finish() }, modifier = Modifier.fillMaxWidth()) { Text("Finish Create Account") }
+        Button(onClick = { permissionMessage = null; permissionStep = 0 }, enabled = permissionStep < 0, modifier = Modifier.fillMaxWidth()) { Text("Enable Permission") }
+        Button(onClick = {
+            val granted = Permissions.hasAffiliateRequired(context)
+            app.store.permissionsSeen = granted
+            if (granted) finish() else permissionMessage = "Allow all permissions before finishing your account."
+        }, modifier = Modifier.fillMaxWidth()) { Text("Finish Create Account") }
+        permissionMessage?.let { Text(it, color = if (Permissions.hasAffiliateRequired(context)) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error) }
     }
 }
 
