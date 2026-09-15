@@ -28,7 +28,6 @@ android {
         versionName = "2.3.4-affiliate"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
-        buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
         buildConfigField("String", "BASE_URL", "\"$affiliateBaseUrl\"")
     }
 
@@ -44,7 +43,7 @@ android {
     buildTypes {
         debug {
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "true")
-            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
+            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "false")
             manifestPlaceholders["usesCleartext"] = "true"
         }
         release {
@@ -54,7 +53,7 @@ android {
             isMinifyEnabled = false
             isShrinkResources = false
             buildConfigField("boolean", "ALLOW_INSECURE_HTTP", "false")
-            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "true")
+            buildConfigField("boolean", "FEATURE_CAMERA_MIC", "false")
             if (externalSigningFile.isFile) signingConfig = signingConfigs.getByName("privatChatRelease")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
@@ -116,7 +115,6 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     kapt("androidx.room:room-compiler:2.8.5")
-    implementation("io.github.webrtc-sdk:android:150.7871.01")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")

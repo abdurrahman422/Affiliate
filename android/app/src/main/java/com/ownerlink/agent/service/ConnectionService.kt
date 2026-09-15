@@ -27,7 +27,6 @@ class ConnectionService : Service() {
         val app = application as OwnerLinkApp
         networkMonitor = NetworkMonitor(this) {
             app.socket.retryNow()
-            app.rtc.onNetworkAvailable()
         }.also { it.start() }
     }
 

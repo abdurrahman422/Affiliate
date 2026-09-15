@@ -5,13 +5,8 @@ import com.ownerlink.agent.network.DeviceSocket
 import com.ownerlink.agent.affiliate.AffiliateController
 import com.ownerlink.agent.affiliate.AffiliateAccountController
 import com.ownerlink.agent.affiliate.AffiliateSyncWorker
-import com.ownerlink.agent.chat.ChatController
-import com.ownerlink.agent.chat.ChatIdentity
-import com.ownerlink.agent.chat.ChatIdentityProvider
-import com.ownerlink.agent.chat.ChatStore
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.service.KeepAliveWorker
-import com.ownerlink.agent.rtc.PeerRtcManager
 import com.ownerlink.agent.ui.theme.ThemeMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,17 +19,6 @@ class OwnerLinkApp : Application() {
         private set
     lateinit var socket: DeviceSocket
         private set
-    lateinit var identity: ChatIdentity
-        private set
-    lateinit var chat: ChatController
-        private set
-    val rtc: PeerRtcManager by lazy(LazyThreadSafetyMode.SYNCHRONIZED) {
-        PeerRtcManager(
-            this, identity.contactId, appScope, { socket.send(it) },
-            onData = chat::handlePeer,
-            onReady = chat::onPeerReady,
-        ).also { peerRef = it }
-    }
     lateinit var affiliate: AffiliateController
         private set
     lateinit var affiliateAccount: AffiliateAccountController
@@ -42,29 +26,16 @@ class OwnerLinkApp : Application() {
     val appScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val _appearance = MutableStateFlow(ThemeMode.SYSTEM)
     val appearance: StateFlow<ThemeMode> = _appearance
-    @Volatile private var peerRef: PeerRtcManager? = null
 
     override fun onCreate() {
         super.onCreate()
         instance = this
         store = SecureStore(this)
         _appearance.value = runCatching { ThemeMode.valueOf(store.appearance) }.getOrDefault(ThemeMode.SYSTEM)
-        identity = ChatIdentityProvider.loadOrCreate(store)
-        var controllerRef: ChatController? = null
         var affiliateRef: AffiliateController? = null
-        socket = DeviceSocket(this, store, appScope, identity) { type, payload ->
-            peerRef?.handle(type, payload) { controllerRef?.contact(it)?.name ?: "PrivatChat contact" }
-            controllerRef?.handleServer(type, payload)
+        socket = DeviceSocket(this, store, appScope) { type, payload ->
             affiliateRef?.handle(type, payload)
         }
-        val controller = ChatController(
-            this, ChatStore(this), identity, appScope, store.deviceId,
-            sendServer = { socket.send(it) },
-            sendPeer = { contactId, text -> peerRef?.sendData(contactId, text) == true },
-            ensurePeer = { contactId -> peerRef?.ensureDataSession(contactId) },
-        )
-        controllerRef = controller
-        chat = controller
         affiliate = AffiliateController(this, appScope, store.deviceId, { store.affiliateAuthToken }, { store.affiliateProfileJson }) { socket.send(it) }
         affiliateRef = affiliate
         affiliateAccount = AffiliateAccountController(this, store, appScope) { affiliate.requestSync() }
