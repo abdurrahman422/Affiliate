@@ -208,7 +208,7 @@ private fun AffiliateTasks(open: (AffiliateTaskItem) -> Unit, connectDashboard: 
     LazyColumn(Modifier.fillMaxSize().padding(horizontal = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         item { AffiliateHeader("Welcome back, $userName", if (socket in setOf(ConnectionState.Online, ConnectionState.WaitingForPair)) "Your next opportunity is ready" else "Offline mode · cached tasks available") }
         item { GradientHeroCard("Your next opportunity", available.firstOrNull()?.title ?: "Stay ready", available.firstOrNull()?.let { "Earn ${it.reward} coin" } ?: "New tasks will appear automatically") }
-        if (!paired) item { ConnectDashboardTask(connectDashboard) }
+        if (!paired && !state.dashboardRewardClaimed) item { ConnectDashboardTask(connectDashboard) }
         if (state.categories.isNotEmpty()) item { LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) { item { AssistChip(onClick = { category = null }, label = { Text("All") }, leadingIcon = if (category == null) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) }; items(state.categories) { item -> AssistChip(onClick = { category = item.categoryId }, label = { Text(item.name) }, leadingIcon = if (category == item.categoryId) ({ Icon(Icons.Rounded.CloudDone, null, Modifier.size(16.dp)) }) else null) } } }
         if (state.loading) item { Box(Modifier.fillMaxWidth().padding(40.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator() } }
         if (!state.loading && state.tasks.isEmpty()) item { AffiliateEmpty("No tasks available", "Published tasks will appear here. Cached tasks remain visible offline.") }

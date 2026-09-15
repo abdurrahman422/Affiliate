@@ -727,8 +727,10 @@ class AffiliateService:
         task_rows = [row for row in candidates if row["task_id"] in visible_ids
                      and (full or int(row.get("revision", 0)) > cursor)]
         ledger = self.ledger(user_id=user_id, limit=100)
+        dashboard_reward_claimed = any(row.get("entry_type") == "DASHBOARD_BONUS" for row in ledger)
         return {"cursor": current_cursor, "categories": [row for row in self.categories() if row.get("enabled", True)], "tasks": task_rows, "submissions": submissions,
-                "wallet": {"balance": milli_to_coins(int(user.get("balance_milli", 0))), "ledger": ledger},
+                "wallet": {"balance": milli_to_coins(int(user.get("balance_milli", 0))), "ledger": ledger,
+                           "dashboard_reward_claimed": dashboard_reward_claimed},
                 "full": full}
 
     def submit(self, task_id: str, client_submission_id: str, user_id: str, device_id: str, raw_values: Any) -> dict[str, Any]:

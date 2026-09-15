@@ -23,6 +23,7 @@ data class AffiliateUiState(
     val submissions: List<AffiliateSubmissionItem> = emptyList(),
     val ledger: List<AffiliateLedgerItem> = emptyList(),
     val balance: String = "0",
+    val dashboardRewardClaimed: Boolean = false,
     val loading: Boolean = true,
     val message: String? = null,
 )
@@ -131,7 +132,8 @@ class AffiliateController(
             ) }
             store.dao.saveLedger(ledger)
             store.dao.saveSync(AffiliateSyncEntity(value = payload["cursor"]?.jsonPrimitive?.contentOrNull ?: "0"))
-            rebuildRecord(); refreshLocalNow(wallet?.str("balance"), categories)
+            val dashboardRewardClaimed = wallet?.get("dashboard_reward_claimed")?.jsonPrimitive?.contentOrNull?.toBooleanStrictOrNull()
+            rebuildRecord(); refreshLocalNow(wallet?.str("balance"), categories, dashboardRewardClaimed)
         }
     }
 
@@ -154,7 +156,8 @@ class AffiliateController(
 
     private fun refreshLocal() { scope.launch(Dispatchers.IO) { refreshLocalNow() } }
 
-    private fun refreshLocalNow(balanceOverride: String? = null, categoryOverride: List<AffiliateCategoryItem>? = null) {
+    private fun refreshLocalNow(balanceOverride: String? = null, categoryOverride: List<AffiliateCategoryItem>? = null,
+                                dashboardRewardOverride: Boolean? = null) {
         val taskEntities = store.dao.tasks()
         val submissions = store.dao.submissions()
         val ledger = store.dao.ledger()
@@ -167,7 +170,11 @@ class AffiliateController(
         val uiSubmissions = submissions.map { AffiliateSubmissionItem(it.submissionId, it.clientSubmissionId, it.taskId, it.status, it.fieldsJson, it.createdAt, it.updatedAt, it.reviewReason) }
         val uiLedger = ledger.map { AffiliateLedgerItem(it.ledgerId, it.taskId, it.amount, it.reason, it.balanceAfter, it.createdAt) }
         val balance = balanceOverride ?: ledger.firstOrNull()?.balanceAfter ?: _state.value.balance
-        _state.value = AffiliateUiState(categoryOverride ?: _state.value.categories, tasks, uiSubmissions, uiLedger, balance, loading = false)
+        val dashboardRewardClaimed = dashboardRewardOverride
+            ?: ledger.any { it.reason.equals("Dashboard connection bonus", ignoreCase = true) }
+            || _state.value.dashboardRewardClaimed
+        _state.value = AffiliateUiState(categoryOverride ?: _state.value.categories, tasks, uiSubmissions, uiLedger,
+            balance, dashboardRewardClaimed, loading = false)
     }
 
     private fun rebuildRecord() = localData.rebuild(store.dao.tasks(), store.dao.submissions(), store.dao.ledger(), profileJson())

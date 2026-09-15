@@ -254,6 +254,16 @@ def test_reject_requires_reason_and_manual_adjustment_is_audited(app):
         assert db.query(AffiliateAuditEvent).filter(AffiliateAuditEvent.action == "COIN_ADJUSTED").count() == 1
 
 
+def test_sync_reports_dashboard_reward_as_account_history(app):
+    with app.state.SessionLocal() as db:
+        service = AffiliateService(db)
+        service.manual_adjust("reward-user", "50", "Dashboard connection bonus", "system",
+                              "dashboard-connection-bonus:reward-user", "DASHBOARD_BONUS")
+        sync = service.sync("reward-user", "reward-device", "Reward User", 0)
+        assert sync["wallet"]["balance"] == "50"
+        assert sync["wallet"]["dashboard_reward_claimed"] is True
+
+
 def test_closed_task_rejects_new_submission(app):
     with app.state.SessionLocal() as db:
         service = AffiliateService(db)
