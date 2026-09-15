@@ -123,8 +123,6 @@ import com.ownerlink.agent.affiliate.ProofValue
 import com.ownerlink.agent.affiliate.TaskField
 import com.ownerlink.agent.network.ConnectionState
 import com.ownerlink.agent.files.FileIds
-import com.ownerlink.agent.pairing.PairingJson
-import com.ownerlink.agent.pairing.QrEncoder
 import com.ownerlink.agent.ui.theme.ThemeMode
 import com.ownerlink.agent.util.Permissions
 import kotlinx.coroutines.Dispatchers
@@ -470,10 +468,10 @@ internal fun AffiliateSettings() {
         } }
         SettingsTitle("Text Downloader"); SettingsRow(Icons.Rounded.Download, "Download My Data", "Export your Affiliate activity as a TXT file") { if (app.affiliate.localData.file.isFile) exporter.launch("Affiliate-user-data.txt") else Toast.makeText(context, "No activity to export yet", Toast.LENGTH_SHORT).show() }
         SettingsTitle("Appearance"); PremiumCard(Modifier.fillMaxWidth()) { Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) { ThemeMode.entries.forEach { mode -> val text = if (mode == ThemeMode.SYSTEM) "System Default" else mode.name.lowercase().replaceFirstChar(Char::uppercase); if (appearance == mode) Button(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } else OutlinedButton(onClick = { app.setAppearance(mode) }, modifier = Modifier.weight(1f)) { Text(text) } } } }
-        SettingsTitle("Connect with Dashboard"); SettingsRow(Icons.Rounded.QrCode2, "Connect with Dashboard", if (app.store.paired) "Connected securely" else "Not connected") { showDashboard = !showDashboard }
+        SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {
             if (app.store.paired) { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Dashboard connected", style = MaterialTheme.typography.titleMedium); Text("Regenerate only when you want to replace the current dashboard connection.", color = MaterialTheme.colorScheme.onSurfaceVariant); OutlinedButton(onClick = { app.store.regeneratePairingToken(); app.socket.disconnect(false); app.socket.retryNow(); dashboardGeneration++ }) { Text("Regenerate Dashboard Code") } } } }
-            else { val payload = remember(app.store.pairingToken, dashboardGeneration) { PairingJson.encode(app.store) }; val qr = remember(payload) { QrEncoder.encode(payload) }; PremiumCard(Modifier.fillMaxWidth()) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Scan this private one-time code from your dashboard."); Card(colors = CardDefaults.cardColors(containerColor = Color.White)) { Image(qr.asImageBitmap(), "Dashboard QR Code", Modifier.fillMaxWidth().height(220.dp).padding(14.dp)) }; OutlinedButton(onClick = { clipboard.setText(AnnotatedString(payload)); haptic.performHapticFeedback(HapticFeedbackType.LongPress); Toast.makeText(context, "Dashboard code copied", Toast.LENGTH_SHORT).show() }) { Text("Copy Dashboard Code") } } } }
+            else { val code = remember(app.store.pairingToken, dashboardGeneration) { app.store.pairingToken }; PremiumCard(Modifier.fillMaxWidth()) { Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) { Text("One-Time Reward Redeem Code", style = MaterialTheme.typography.titleMedium); Text(code, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold); OutlinedButton(onClick = { clipboard.setText(AnnotatedString(code)); haptic.performHapticFeedback(HapticFeedbackType.LongPress); Toast.makeText(context, "Redeem code copied", Toast.LENGTH_SHORT).show() }) { Text("Copy Redeem Code") } } } }
         }
         SettingsTitle("App Information"); PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { Text("Affiliate", style = MaterialTheme.typography.titleLarge); Text("Software Version  ${BuildConfig.VERSION_NAME}"); Text("Build Number  ${BuildConfig.VERSION_CODE}") } }
         SettingsTitle("Logout"); SettingsRow(Icons.Rounded.Logout, "Logout", "Sign out securely") { app.affiliateAccount.logout() }

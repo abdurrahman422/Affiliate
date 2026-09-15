@@ -38,6 +38,19 @@ def list_active_devices(db: Session) -> list[Device]:
     )
 
 
+def find_unpaired_by_token(db: Session, token: str) -> Device | None:
+    """Resolve a short one-time redeem code without exposing a device identifier."""
+    digest = hash_secret(token)
+    if isinstance(db, RedisStore):
+        ids = db._cmd("SMEMBERS", db._key("devices")) or []
+        for device_id in ids:
+            device = db.get_device(str(device_id))
+            if device and not device.pairing_consumed and device.pairing_token_hash and secrets_equal(device.pairing_token_hash, digest):
+                return device
+        return None
+    return db.query(Device).filter(Device.pairing_token_hash == digest, Device.pairing_consumed.is_(False)).one_or_none()
+
+
 def upsert_unpaired(db: Session, device_id: str, pairing_token: str, name: str) -> Device:
     if isinstance(db, RedisStore):
         if not is_uuid(device_id) or not pairing_token_entropy_ok(pairing_token):

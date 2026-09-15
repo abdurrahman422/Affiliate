@@ -1008,6 +1008,16 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         if not body:
             return json_error("Expected JSON pairing payload", "BAD_REQUEST")
         payload = body.get("payload") if isinstance(body.get("payload"), dict) else body
+        redeem_code = str(payload.get("redeem_code") or "").strip()
+        if redeem_code:
+            if not pairing_token_entropy_ok(redeem_code):
+                return json_error("Redeem code is invalid", "INVALID_TOKEN")
+            lookup_db = db_session()
+            try: pending = device_ops.find_unpaired_by_token(lookup_db, redeem_code)
+            finally: lookup_db.close()
+            if pending is None:
+                return json_error("Redeem code was not found. Keep Affiliate open and try again.", "UNKNOWN_CODE", 404)
+            payload = {"v": 1, "device_id": pending.device_id, "pairing_token": redeem_code, "server": settings.OWNERLINK_BASE_URL}
         try:
             v = int(payload.get("v") or 0)
         except (TypeError, ValueError):

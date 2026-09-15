@@ -87,6 +87,7 @@ class SecureStore(private val context: Context) {
     private fun ensureIdentity() {
         if (deviceId.isBlank()) deviceId = UUID.randomUUID().toString()
         if (pairingToken.isBlank()) pairingToken = newPairingToken()
+        if (!paired && pairingToken.length != 24) pairingToken = newPairingToken()
     }
 
     val serverUrl: String
@@ -205,7 +206,8 @@ class SecureStore(private val context: Context) {
         private const val KEY_CHAT_PUBLIC = "privatchat_identity_public"
 
         fun newPairingToken(): String {
-            val bytes = ByteArray(32)
+            // 144 bits of randomness encoded as exactly 24 URL-safe characters.
+            val bytes = ByteArray(18)
             SecureRandom().nextBytes(bytes)
             return Base64.getUrlEncoder().withoutPadding().encodeToString(bytes)
         }

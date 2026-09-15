@@ -37,6 +37,6 @@ def pairing_token_entropy_ok(token: str) -> bool:
     if not token or not isinstance(token, str):
         return False
     compact = token.strip()
-    if len(compact) < 40:
+    if len(compact) < 20:
         return False
     return True

@@ -3,7 +3,7 @@
 {% block content %}
 <div class="page-head"><div><h1>Devices</h1><p class="muted">Connected phones and permission-gated device operations.</p></div><a class="primary" href="/devices/add">Add device</a></div>
 <div id="device-grid" class="grid">
-{% if not devices %}<p class="empty">No devices paired. In Affiliate, open Settings → Connect with Dashboard.</p>{% endif %}
+{% if not devices %}<p class="empty">No devices connected. In Affiliate, open Settings → Redeem Code.</p>{% endif %}
 {% for d in devices %}<article class="card device-card" data-device-id="{{ d.device_id }}">
   <div class="row"><h2>{{ d.name }}</h2><span class="pill {% if d.online %}ok{% else %}off{% endif %}">{% if d.online %}Online{% else %}Offline{% endif %}</span></div>
   <p class="meta">{% if d.battery is not none %}Battery {{ d.battery }}%{% if d.charging %} · charging{% endif %} · {% endif %}{% if d.last_seen %}Last seen {{ d.last_seen }}{% else %}Never seen{% endif %}</p>
