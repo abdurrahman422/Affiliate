@@ -62,7 +62,9 @@ class AffiliateController(
             }
             Protocol.TASK_PUBLISHED, Protocol.TASK_UPDATED, Protocol.TASK_PAUSED, Protocol.TASK_CLOSED -> {
                 notifications.show(type, "Task list updated")
-                requestSync()
+                // A full snapshot removes stale cached tasks after pause/archive/delete and
+                // also reveals newly published items regardless of their original revision.
+                requestSync(forceFull = true)
             }
         }
     }

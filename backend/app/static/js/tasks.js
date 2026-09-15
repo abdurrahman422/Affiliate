@@ -10,12 +10,13 @@
     try {
       if (type.value === "URL") {
         const urls = String(fd.get("action_urls") || "").split(/\r?\n/).map((v) => v.trim()).filter(Boolean); if (!urls.length) throw new Error("Add at least one destination link.");
-        if (urls.length === 1) await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, action_url: urls[0], field_schema: [] } });
-        else { const category = (window.AFFILIATE_CATEGORIES || []).find((item) => item.category_id === common.category_id); await OwnerLink.api("/api/tasks/import", { method: "POST", body: { version: 1, category: { name: category.name, description: category.description || "" }, series: { name: common.title }, task_defaults: { ...common, title_prefix: common.title, publish: false }, tasks: urls.map((action_url) => ({ action_url })) } }); }
+        if (urls.length === 1) { const result = await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, action_url: urls[0], field_schema: [] } }); await OwnerLink.api(`/api/tasks/${result.task.task_id}/status`, { method: "POST", body: { status: "PUBLISHED" } }); }
+        else { const category = (window.AFFILIATE_CATEGORIES || []).find((item) => item.category_id === common.category_id); await OwnerLink.api("/api/tasks/import", { method: "POST", body: { version: 1, category: { name: category.name, description: category.description || "" }, series: { name: common.title }, task_defaults: { ...common, title_prefix: common.title, publish: true }, tasks: urls.map((action_url) => ({ action_url })) } }); }
       } else {
         const fields = [...builder.children].map((row, index) => { const inputs = row.querySelectorAll("input,select"); return { id: `answer_${index + 1}`, label: inputs[0].value.trim(), type: inputs[1].value, required: inputs[2].checked }; });
         if (!fields.length || fields.some((field) => !field.label)) throw new Error("Add a name for every form question.");
-        await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, field_schema: fields } });
+        const result = await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, field_schema: fields } });
+        await OwnerLink.api(`/api/tasks/${result.task.task_id}/status`, { method: "POST", body: { status: "PUBLISHED" } });
       }
       location.reload();
     } catch (error) { output.textContent = error.message; }
