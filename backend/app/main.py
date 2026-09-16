@@ -1324,7 +1324,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             registry.close_transfer(device_id, request_id)
 
     @app.get("/api/devices/{device_id}/download")
-    async def api_download(request: Request, device_id: str, file: str):
+    async def api_download(request: Request, device_id: str, file: str, inline: bool = False):
         auth = require_api_owner(request)
         if isinstance(auth, JSONResponse):
             return auth
@@ -1372,11 +1372,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                 finally:
                     registry.close_transfer(device_id, transfer_id)
 
-            headers = {"Content-Disposition": content_disposition(str(meta.get("name") or "download"))}
+            mime = str(meta.get("mime") or "application/octet-stream")
+            disposition = content_disposition(str(meta.get("name") or "download"))
+            if inline and mime.startswith("image/"):
+                disposition = disposition.replace("attachment;", "inline;", 1)
+            headers = {"Content-Disposition": disposition}
             size = meta.get("size")
             if isinstance(size, int) and size >= 0:
                 headers["Content-Length"] = str(size)
-            mime = str(meta.get("mime") or "application/octet-stream")
             return StreamingResponse(generate(), media_type=mime, headers=headers)
         except DeviceOffline:
             registry.close_transfer(device_id, transfer_id)
