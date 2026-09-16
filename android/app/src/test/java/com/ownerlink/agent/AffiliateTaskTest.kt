@@ -52,6 +52,16 @@ class AffiliateTaskTest {
         assertTrue(DynamicTaskValidator.validate(emptyList(), mapOf("session_token" to "never-store")).containsKey("session_token"))
     }
 
+    @Test fun reviewRequiresFullSentenceInAnyLanguageAndScreenshot() {
+        val answer = TaskField("review", "long_text", "Review", true, minLength = 60, minWords = 12)
+        val image = TaskField("screenshot", "image", "Screenshot", true, allowedTypes = listOf("image/png"))
+        val screenshot = ProofValue("screen.png", "image/png", 200, "a".repeat(64), "content://safe")
+        val good = "The opening scene was clear and the explanation helped me understand every important point in this video."
+        assertTrue(DynamicTaskValidator.validate(listOf(answer, image), mapOf("review" to good, "screenshot" to screenshot)).isEmpty())
+        assertTrue(DynamicTaskValidator.validate(listOf(answer, image), mapOf("review" to "good ".repeat(12), "screenshot" to screenshot)).containsKey("review"))
+        assertTrue(DynamicTaskValidator.validate(listOf(answer, image), mapOf("review" to good)).containsKey("screenshot"))
+    }
+
     @Test fun queuedSubmissionRetriesAfterOfflineAttempt() {
         assertEquals("QUEUED", AffiliateQueueRules.afterAttempt(false))
         assertEquals("SENDING", AffiliateQueueRules.afterAttempt(true))

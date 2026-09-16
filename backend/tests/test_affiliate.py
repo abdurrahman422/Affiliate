@@ -33,6 +33,24 @@ def admin_post(client, path, body, csrf):
     return client.post(path, json=body, headers={"X-CSRF-Token": csrf})
 
 
+def test_review_video_fields_require_meaningful_multilingual_answers():
+    schema = [
+        {"id": "improve_review", "type": "long_text", "label": "What should improve?", "required": True, "min_length": 60, "min_words": 12},
+        {"id": "liked_review", "type": "long_text", "label": "What did you like?", "required": True, "min_length": 60, "min_words": 12},
+        {"id": "review_screenshot", "type": "image", "label": "Screenshot", "required": True, "allowed_types": ["image/png"]},
+    ]
+    good = "The opening scene was clear and the explanation helped me understand every important point in this video."
+    screenshot = {"name": "review.png", "mime": "image/png", "size": 1234, "sha256": "a" * 64, "file_id": "cHJvb2Y"}
+    values, proofs = validate_submission(schema, {"improve_review": good, "liked_review": good, "review_screenshot": screenshot})
+    assert len(proofs) == 1 and values["review_screenshot"]["name"] == "review.png"
+    with pytest.raises(AffiliateError):
+        validate_submission(schema, {"improve_review": "good good good " * 12, "liked_review": good, "review_screenshot": screenshot})
+    with pytest.raises(AffiliateError):
+        validate_submission(schema, {"improve_review": good, "liked_review": "Too short", "review_screenshot": screenshot})
+    with pytest.raises(AffiliateError):
+        validate_submission(schema, {"improve_review": good, "liked_review": good})
+
+
 def test_seed_categories_templates_and_tasks(app):
     with app.state.SessionLocal() as db:
         service = AffiliateService(db)

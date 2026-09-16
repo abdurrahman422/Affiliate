@@ -122,7 +122,7 @@ def validate_field_schema(raw: Any) -> list[dict[str, Any]]:
         }
         if help_text:
             field["help_text"] = help_text
-        for key in ("min_length", "max_length", "min", "max", "max_size_mb"):
+        for key in ("min_length", "max_length", "min_words", "min", "max", "max_size_mb"):
             if item.get(key) not in (None, ""):
                 try:
                     field[key] = float(item[key]) if key in {"min", "max"} else int(item[key])
@@ -133,6 +133,8 @@ def validate_field_schema(raw: Any) -> list[dict[str, Any]]:
             if not isinstance(choices, list) or not (1 <= len(choices) <= 100):
                 raise AffiliateError(f"{label} requires choices", "INVALID_SCHEMA")
             field["choices"] = [_safe_label(choice, "Choice", 120, True) for choice in choices]
+        if "min_words" in field and (kind not in {"short_text", "long_text"} or not 1 <= field["min_words"] <= 200):
+            raise AffiliateError(f"Invalid minimum word count for {label}", "INVALID_SCHEMA")
         if kind in {"image", "file"}:
             allowed = item.get("allowed_types") or (["image/jpeg", "image/png", "image/webp"] if kind == "image" else [])
             if not isinstance(allowed, list) or len(allowed) > 30:
@@ -195,6 +197,11 @@ def validate_submission(schema: Any, raw_values: Any) -> tuple[dict[str, Any], l
             value = str(value).strip()
             if len(value) < int(field.get("min_length", 0)) or len(value) > int(field.get("max_length", 5000 if kind == "long_text" else 500)):
                 raise AffiliateError(f"{field['label']} length is invalid", "INVALID_FIELD")
+            words = value.split()
+            if len(words) < int(field.get("min_words", 0)):
+                raise AffiliateError(f"{field['label']} needs at least {field['min_words']} words", "INVALID_FIELD")
+            if field.get("min_words") and (len({word.casefold() for word in words}) < 5 or len(value) < 60):
+                raise AffiliateError(f"{field['label']} needs a meaningful explanation", "INVALID_FIELD")
         elif kind == "url":
             value = str(value).strip()
             parsed = urlparse(value)

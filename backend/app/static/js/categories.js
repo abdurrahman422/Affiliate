@@ -1,4 +1,9 @@
 (function () {
+  document.getElementById("create-review-category")?.addEventListener("click", async () => {
+    if ((window.AFFILIATE_CATEGORIES || []).some(c => c.name === "Review and Watch")) { alert("Review and Watch already exists."); return; }
+    try { await OwnerLink.api("/api/categories", { method: "POST", body: { name: "Review and Watch", description: "Watch the assigned video and share a thoughtful review: what should improve, what you liked, and a supporting screenshot." } }); location.reload(); }
+    catch (error) { alert(error.message); }
+  });
   document.getElementById("category-form")?.addEventListener("submit", async (event) => {
     event.preventDefault();
     try { await OwnerLink.api("/api/categories", { method: "POST", body: Object.fromEntries(new FormData(event.currentTarget).entries()) }); location.reload(); }

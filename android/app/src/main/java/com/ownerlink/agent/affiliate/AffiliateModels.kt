@@ -22,6 +22,7 @@ data class TaskField(
     val helpText: String? = null,
     val choices: List<String> = emptyList(),
     val minLength: Int? = null,
+    val minWords: Int? = null,
     val maxLength: Int? = null,
     val min: Double? = null,
     val max: Double? = null,
@@ -84,6 +85,9 @@ object DynamicTaskValidator {
                 "short_text", "long_text" -> {
                     val text = value.toString().trim()
                     if (field.minLength != null && text.length < field.minLength) errors[field.id] = "Enter at least ${field.minLength} characters"
+                    val words = text.split(Regex("\\s+")).filter { it.isNotBlank() }
+                    if (field.minWords != null && words.size < field.minWords) errors[field.id] = "Write at least ${field.minWords} words"
+                    if (field.minWords != null && (text.length < 60 || words.map { it.lowercase() }.toSet().size < 5)) errors[field.id] = "Write a meaningful explanation (at least 60 characters and 5 different words)"
                     if (field.maxLength != null && text.length > field.maxLength) errors[field.id] = "Use no more than ${field.maxLength} characters"
                 }
                 "url" -> if (!validUrl(value.toString())) errors[field.id] = "Enter a valid public web address"
@@ -157,7 +161,7 @@ object AffiliateJson {
         required = value["required"]?.jsonPrimitive?.booleanOrNull ?: false,
         helpText = value["help_text"]?.jsonPrimitive?.contentOrNull,
         choices = (value["choices"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty(),
-        minLength = value["min_length"]?.jsonPrimitive?.intOrNull, maxLength = value["max_length"]?.jsonPrimitive?.intOrNull,
+        minLength = value["min_length"]?.jsonPrimitive?.intOrNull, minWords = value["min_words"]?.jsonPrimitive?.intOrNull, maxLength = value["max_length"]?.jsonPrimitive?.intOrNull,
         min = value["min"]?.jsonPrimitive?.doubleOrNull, max = value["max"]?.jsonPrimitive?.doubleOrNull,
         maxSizeMb = value["max_size_mb"]?.jsonPrimitive?.intOrNull ?: 10,
         allowedTypes = (value["allowed_types"] as? JsonArray)?.mapNotNull { it.jsonPrimitive.contentOrNull }.orEmpty(),

@@ -191,11 +191,14 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         decorated: list[dict] = []
         for source in rows:
             row = dict(source)
-            schema = task_map.get(row.get("task_id"), {}).get("field_schema", [])
+            task = task_map.get(row.get("task_id"), {})
+            schema = task.get("field_schema", [])
+            row["action_url"] = task.get("action_url")
+            row["task_title"] = task.get("title") or row.get("task_title")
             labels = {field.get("id"): field.get("label") for field in schema if isinstance(field, dict)}
             row["display_answers"] = [
                 {"label": labels.get(key) or key.replace("_", " ").title(), "value": value}
-                for key, value in row.get("submitted_fields", {}).items()
+                for key, value in row.get("submitted_fields", {}).items() if not isinstance(value, dict)
             ]
             decorated.append(row)
         return decorated

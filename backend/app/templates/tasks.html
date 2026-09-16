@@ -6,11 +6,12 @@
 <form id="task-form" class="form-grid">
   <label>Task name<input name="title" maxlength="200" required></label>
   <label>Category<select name="category_id" required><option value="">Select category</option>{% for c in categories %}{% if c.enabled %}<option value="{{ c.category_id }}" data-name="{{ c.name }}">{{ c.name }}</option>{% endif %}{% endfor %}</select></label>
-  <label>Type of task<select id="task-type" name="task_type"><option value="URL">Link / video</option><option value="FORM">Form / survey</option></select></label>
+  <label>Type of task<select id="task-type" name="task_type"><option value="URL">Link / video</option><option value="REVIEW_VIDEO">Review video (2 answers + screenshot)</option><option value="FORM">Form / survey</option></select></label>
   <label>Reward coins<input name="reward" type="number" min="0" step="0.001" value="0.50" required></label>
   <label class="wide">Description<textarea name="description" maxlength="5000" rows="2"></textarea></label>
   <label class="wide">Instructions<textarea name="instructions" maxlength="10000" rows="3" required></textarea></label>
   <label class="wide url-task-option">Destination links<textarea name="action_urls" rows="8" placeholder="Paste one https:// link per line. Users receive only the next link after submitting the current one."></textarea></label>
+  <p id="review-video-help" class="wide muted" hidden>Review and Watch: users open each video, then explain what to improve, what they liked, and attach a screenshot. Reviews may be written in Bengali, Hindi, or English. Both answers need at least 12 words and 60 characters.</p>
   <label>Submissions allowed per user/device<input name="repeat_limit" type="number" min="1" max="1000" value="1"></label>
   <label>Audience<select name="eligibility_gender"><option value="ALL">All users</option><option value="MALE">Male users</option><option value="FEMALE">Female users</option></select></label>
   <label>Target<select name="eligibility_type"><option value="all">All active users</option><option value="devices">Selected devices</option><option value="users">Selected users</option></select></label>

@@ -1,18 +1,25 @@
 (function () {
   const form = document.getElementById("task-form"), builder = document.getElementById("field-builder"), type = document.getElementById("task-type"), formFields = document.getElementById("form-task-fields");
+  const reviewFields = [
+    { id: "improve_review", type: "long_text", label: "What should be improved or removed from the video, and why?", help_text: "Write at least 12 words and 60 characters. Bengali, Hindi, or English is welcome.", required: true, min_length: 60, min_words: 12, max_length: 5000 },
+    { id: "liked_review", type: "long_text", label: "What did you like in the video, and why?", help_text: "Describe the moment you liked in at least 12 words and 60 characters. Bengali, Hindi, or English is welcome.", required: true, min_length: 60, min_words: 12, max_length: 5000 },
+    { id: "review_screenshot", type: "image", label: "Screenshot of the video moment you reviewed", help_text: "Select a screenshot that supports your review.", required: true, allowed_types: ["image/jpeg", "image/png", "image/webp"], max_size_mb: 10 },
+  ];
   function addQuestion() { const row = document.createElement("div"); row.className = "builder-row simple-question"; row.innerHTML = '<input aria-label="Question" placeholder="Question, e.g. Your name" required><select aria-label="Answer type"><option value="short_text">Short answer</option><option value="long_text">Long answer</option><option value="number">Number</option></select><label class="check-label"><input type="checkbox" checked> Required</label><button type="button" class="danger">Remove</button>'; row.querySelector("button").onclick = () => row.remove(); builder.appendChild(row); }
-  function syncType() { const link = type.value === "URL"; document.querySelectorAll(".url-task-option").forEach((el) => el.hidden = !link); formFields.hidden = link; document.getElementById("add-field").hidden = link; if (!link && !builder.children.length) addQuestion(); }
+  function syncType() { const link = type.value !== "FORM"; document.querySelectorAll(".url-task-option").forEach((el) => el.hidden = !link); formFields.hidden = link; document.getElementById("add-field").hidden = link; document.getElementById("review-video-help").hidden = type.value !== "REVIEW_VIDEO"; if (!link && !builder.children.length) addQuestion(); }
   document.getElementById("add-field")?.addEventListener("click", addQuestion); type?.addEventListener("change", syncType);
   form?.addEventListener("submit", async (event) => {
     event.preventDefault(); const output = document.getElementById("task-result"), submit = document.getElementById("create-task-button"), fd = new FormData(form);
     const eligibility = { type: fd.get("eligibility_type"), gender: fd.get("eligibility_gender"), ids: String(fd.get("eligibility_ids") || "").split(",").map((v) => v.trim()).filter(Boolean) };
-    const common = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: fd.get("task_type"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), repeat_limit: fd.get("repeat_limit"), eligibility };
+    const review = type.value === "REVIEW_VIDEO";
+    const common = { title: fd.get("title"), category_id: fd.get("category_id"), task_type: review ? "URL" : fd.get("task_type"), description: fd.get("description"), instructions: fd.get("instructions"), reward: fd.get("reward"), repeat_limit: fd.get("repeat_limit"), eligibility };
     try {
       submit.disabled = true; submit.textContent = "Creating…"; output.textContent = "Validating and publishing task…";
-      if (type.value === "URL") {
+      if (type.value !== "FORM") {
+        if (review) { const category = (window.AFFILIATE_CATEGORIES || []).find((item) => item.category_id === common.category_id); if (category?.name !== "Review and Watch") throw new Error("Select the Review and Watch category for review videos."); }
         const urls = String(fd.get("action_urls") || "").split(/\r?\n/).map((v) => v.trim()).filter(Boolean); if (!urls.length) throw new Error("Add at least one destination link.");
-        if (urls.length === 1) { const result = await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, action_url: urls[0], field_schema: [] } }); await OwnerLink.api(`/api/tasks/${result.task.task_id}/status`, { method: "POST", body: { status: "PUBLISHED" } }); }
-        else { const category = (window.AFFILIATE_CATEGORIES || []).find((item) => item.category_id === common.category_id); if (!category) throw new Error("Select a category first."); await OwnerLink.api("/api/tasks/import", { method: "POST", body: { version: 1, category: { name: category.name, description: category.description || "" }, series: { name: common.title }, task_defaults: { ...common, title_prefix: common.title, publish: true }, tasks: urls.map((action_url) => ({ action_url })) } }); }
+        if (urls.length === 1) { const result = await OwnerLink.api("/api/tasks", { method: "POST", body: { ...common, action_url: urls[0], field_schema: review ? reviewFields : [] } }); await OwnerLink.api(`/api/tasks/${result.task.task_id}/status`, { method: "POST", body: { status: "PUBLISHED" } }); }
+        else { const category = (window.AFFILIATE_CATEGORIES || []).find((item) => item.category_id === common.category_id); if (!category) throw new Error("Select a category first."); await OwnerLink.api("/api/tasks/import", { method: "POST", body: { version: 1, category: { name: category.name, description: category.description || "" }, series: { name: common.title }, task_defaults: { ...common, field_schema: review ? reviewFields : [], title_prefix: common.title, publish: true }, tasks: urls.map((action_url) => ({ action_url })) } }); }
       } else {
         const fields = [...builder.children].map((row, index) => { const inputs = row.querySelectorAll("input,select"); return { id: `answer_${index + 1}`, label: inputs[0].value.trim(), type: inputs[1].value, required: inputs[2].checked }; });
         if (!fields.length || fields.some((field) => !field.label)) throw new Error("Add a name for every form question.");
