@@ -56,15 +56,17 @@ class DeviceSocket(
 
     private val heartbeat = object : Runnable {
         override fun run() {
-            if (lifecycle.status == SocketStatus.CONNECTED &&
-                (_state.value == ConnectionState.Online || _state.value == ConnectionState.WaitingForPair)) {
+            if (lifecycle.status != SocketStatus.CONNECTED || stopRequested.get()) return
+            if (_state.value == ConnectionState.Online || _state.value == ConnectionState.WaitingForPair) {
                 val (battery, charging) = Battery.snapshot(appContext)
                 socket?.send(Protocol.envelope(Protocol.HEARTBEAT, store.deviceId, buildJsonObject {
                     if (battery != null) put("battery", battery)
                     if (charging != null) put("charging", charging)
                 }))
-                handler.postDelayed(this, 15_000)
             }
+            // onOpen runs before AUTH_OK/UNPAIRED_ACK. Keep polling until the
+            // handshake changes the state so the heartbeat cannot silently die.
+            handler.postDelayed(this, 15_000)
         }
     }
     private val reconnectRunnable = Runnable { synchronized(this) { open(lifecycle.reconnectFired()) } }
