@@ -10,6 +10,8 @@ import android.hardware.display.VirtualDisplay
 import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.os.Build
+import android.os.Handler
+import android.os.Looper
 import com.ownerlink.agent.accessibility.OwnerLinkAccessibilityService
 import com.ownerlink.agent.network.BinaryFrames
 import com.ownerlink.agent.network.Protocol
@@ -45,6 +47,7 @@ class VirtualWorkspaceManager(
     private var streamJob: Job? = null
     private var sequence = 0
     private val streamId = UUID(0, 1)
+    private val mainHandler = Handler(Looper.getMainLooper())
 
     @Synchronized
     fun start(fps: Int = 1, quality: Int = 60): JsonObject {
@@ -73,7 +76,7 @@ class VirtualWorkspaceManager(
                 }
                 status("CONSENT_ENDED", "Android ended the Remote Workspace permission", null)
             }
-        }, null)
+        }, mainHandler)
         val virtualDisplay = activeProjection.createVirtualDisplay(
             "Affiliate Remote Workspace",
             width,
