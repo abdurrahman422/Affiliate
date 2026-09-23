@@ -487,9 +487,9 @@ internal fun AffiliateSettings() {
             runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))) }
                 .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
         }
-        SettingsTitle("Remote Workspace")
-        SettingsRow(Icons.Rounded.CastConnected, "Prepare Remote Workspace", "Approve Android's screen-sharing prompt before using the dashboard") {
-            context.startActivity(Intent(context, com.ownerlink.agent.remote.WorkspaceConsentActivity::class.java))
+        SettingsTitle("Remote Screen")
+        SettingsRow(Icons.Rounded.CastConnected, "Enable Remote Screen", "Enable Affiliate in Accessibility settings to mirror and control this display") {
+            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {

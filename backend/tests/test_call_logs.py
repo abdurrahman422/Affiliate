@@ -17,20 +17,20 @@ def test_call_logs_require_dashboard_auth(client):
     assert client.get(f"/api/devices/{new_device_id()}/call-logs").status_code == 401
 
 
-def test_device_page_replaces_remote_screen_with_call_logs(client):
+def test_device_page_shows_call_logs_and_remote_screen(client):
     device_id = _paired_device(client)
     page = client.get(f"/device/{device_id}")
     assert page.status_code == 200
     assert "Call Logs" in page.text
-    assert "Remote Screen" not in page.text
-    assert "Remote Workspace" in page.text
-    workspace = client.get(f"/device/{device_id}/workspace")
-    assert workspace.status_code == 200
-    assert "secondary Android display" in workspace.text
+    assert "Remote Screen" in page.text
+    assert "Remote Workspace" not in page.text
+    screen = client.get(f"/device/{device_id}/screen")
+    assert screen.status_code == 200
+    assert "Low-FPS Accessibility screenshot" in screen.text
 
 
-def test_remote_workspace_page_requires_dashboard_login(client):
-    response = client.get(f"/device/{new_device_id()}/workspace", follow_redirects=False)
+def test_remote_screen_page_requires_dashboard_login(client):
+    response = client.get(f"/device/{new_device_id()}/screen", follow_redirects=False)
     assert response.status_code in {302, 303, 307}
 
 

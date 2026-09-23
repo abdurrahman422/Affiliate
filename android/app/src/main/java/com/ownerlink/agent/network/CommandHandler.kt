@@ -10,7 +10,6 @@ import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.location.LocationRepository
 import com.ownerlink.agent.remote.GestureDispatcher
 import com.ownerlink.agent.remote.ScreenStreamer
-import com.ownerlink.agent.remote.VirtualWorkspaceManager
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Permissions
@@ -34,7 +33,6 @@ class CommandHandler(
     private val location = LocationRepository(context)
     private val files = FileRepository(context, store)
     private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
-    private val virtualWorkspace = VirtualWorkspaceManager(context, scope, store.deviceId, sendJson, sendBytes)
 
     fun handle(type: String, requestId: String?, payload: JsonObject) {
         scope.launch(Dispatchers.IO) {
@@ -85,22 +83,6 @@ class CommandHandler(
                             err(requestId, "ACCESSIBILITY_DISABLED", message ?: "Gesture failed")
                         }
                     }
-                    Protocol.START_VIRTUAL_WORKSPACE -> {
-                        ok(requestId, virtualWorkspace.start(payload.int("fps") ?: 1, payload.int("quality") ?: 60))
-                    }
-                    Protocol.STOP_VIRTUAL_WORKSPACE -> ok(requestId, virtualWorkspace.stop())
-                    Protocol.LIST_VIRTUAL_APPS -> ok(requestId, virtualWorkspace.listApps())
-                    Protocol.LAUNCH_VIRTUAL_APP -> {
-                        val packageName = payload.str("package") ?: error("App package is required")
-                        val data = if (packageName == "__HOME__") virtualWorkspace.launchHome()
-                        else virtualWorkspace.launchPackage(packageName)
-                        ok(requestId, data)
-                    }
-                    Protocol.VIRTUAL_GESTURE -> {
-                        val (okFlag, message) = virtualWorkspace.gesture(payload)
-                        if (okFlag) ok(requestId, buildJsonObject { put("done", true) })
-                        else err(requestId, "VIRTUAL_INPUT_UNAVAILABLE", message ?: "Virtual input failed")
-                    }
                     else -> err(requestId, "UNKNOWN", "Unsupported command")
                 }
             } catch (e: SecurityException) {
@@ -118,7 +100,6 @@ class CommandHandler(
 
     fun stopStream() {
         streamer.stop()
-        virtualWorkspace.stop()
     }
 
     private fun sendThumb(requestId: String?, fileId: String?) {
@@ -197,8 +178,6 @@ class CommandHandler(
             put("location", androidx.core.content.ContextCompat.checkSelfPermission(context, android.Manifest.permission.ACCESS_COARSE_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED)
             put("camera_mic", BuildConfig.FEATURE_CAMERA_MIC)
             put("camera_mic_available", false)
-            put("virtual_workspace_supported", context.packageManager.hasSystemFeature("android.software.activities_on_secondary_displays"))
-            put("virtual_workspace_running", virtualWorkspace.isRunning())
             if (battery != null) put("battery", battery)
             if (charging != null) put("charging", charging)
         }

@@ -116,10 +116,6 @@ button, .primary { cursor: pointer; }
   overflow: auto;
   touch-action: none;
 }
-.workspace-controls { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-bottom:14px; }
-.workspace-controls label { min-width:min(100%, 340px); flex:1; }
-.workspace-stage { max-width:450px; margin-inline:auto; aspect-ratio:9/20; }
-.workspace-stage img { width:100%; height:100%; object-fit:contain; }
 .screen-stage img { max-width: 100%; max-height: 72vh; user-select: none; -webkit-user-drag: none; }
 .hidden { display: none; }
 .inline { display: inline; }

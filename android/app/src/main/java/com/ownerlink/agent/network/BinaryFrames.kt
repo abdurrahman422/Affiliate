@@ -9,7 +9,6 @@ object BinaryFrames {
     const val KIND_FILE = 1
     const val KIND_SCREEN = 2
     const val KIND_THUMB = 3
-    const val KIND_WORKSPACE = 4
     const val FLAG_LAST = 0x01
     private const val HEADER = 4 + 1 + 16 + 4 + 1
 

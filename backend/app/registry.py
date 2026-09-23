@@ -9,9 +9,9 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from .binary import FLAG_LAST, KIND_FILE, KIND_SCREEN, KIND_THUMB, KIND_WORKSPACE, parse_frame, unpack_screen_payload
+from .binary import FLAG_LAST, KIND_FILE, KIND_SCREEN, KIND_THUMB, parse_frame, unpack_screen_payload
 from .config import Settings
-from .protocol import ERROR, FILE_BEGIN, FILE_END, RESPONSE, SCREEN_STATUS, VIRTUAL_WORKSPACE_STATUS, envelope
+from .protocol import ERROR, FILE_BEGIN, FILE_END, RESPONSE, SCREEN_STATUS, envelope
 
 log = logging.getLogger("ownerlink.registry")
 
@@ -72,7 +72,6 @@ class Registry:
         self.settings = settings
         self.links: dict[str, DeviceLink] = {}
         self.screen_subs: dict[str, set[asyncio.Queue]] = {}
-        self.workspace_subs: dict[str, set[asyncio.Queue]] = {}
         self._guard = asyncio.Lock()
         self.contacts: dict[str, DeviceLink] = {}
 
@@ -235,10 +234,6 @@ class Registry:
             self._broadcast_screen_json(link.device_id, message)
             return
 
-        if msg_type == VIRTUAL_WORKSPACE_STATUS:
-            self._broadcast_workspace_json(link.device_id, message)
-            return
-
     def handle_binary(self, link: DeviceLink, data: bytes) -> None:
         link.touch()
         try:
@@ -281,13 +276,6 @@ class Registry:
             except ValueError:
                 return
             self._broadcast_screen_frame(link.device_id, width, height, rotation, jpeg, seq)
-
-        if kind == KIND_WORKSPACE:
-            try:
-                width, height, rotation, jpeg = unpack_screen_payload(payload)
-            except ValueError:
-                return
-            self._broadcast_workspace_frame(link.device_id, width, height, rotation, jpeg, seq)
 
     def _broadcast_screen_json(self, device_id: str, message: dict) -> None:
         for queue in list(self.screen_subs.get(device_id, set())):
@@ -337,48 +325,6 @@ class Registry:
 
     def screen_subscriber_count(self, device_id: str) -> int:
         return len(self.screen_subs.get(device_id, set()))
-
-    def _broadcast_workspace_json(self, device_id: str, message: dict) -> None:
-        self._broadcast_to(self.workspace_subs.get(device_id, set()), ("json", message))
-
-    def _broadcast_workspace_frame(
-        self, device_id: str, width: int, height: int, rotation: int, jpeg: bytes, seq: int
-    ) -> None:
-        header = {"type": "FRAME_META", "width": width, "height": height, "rotation": rotation, "seq": seq}
-        self._broadcast_to(self.workspace_subs.get(device_id, set()), ("frame", header, jpeg))
-
-    @staticmethod
-    def _broadcast_to(subscribers: set[asyncio.Queue], item: tuple) -> None:
-        for queue in list(subscribers):
-            try:
-                queue.put_nowait(item)
-            except asyncio.QueueFull:
-                try:
-                    queue.get_nowait()
-                except Exception:
-                    pass
-                try:
-                    queue.put_nowait(item)
-                except Exception:
-                    pass
-
-    def subscribe_workspace(self, device_id: str) -> asyncio.Queue:
-        queue: asyncio.Queue = asyncio.Queue(maxsize=self.settings.SCREEN_QUEUE_SIZE)
-        self.workspace_subs.setdefault(device_id, set()).add(queue)
-        return queue
-
-    def unsubscribe_workspace(self, device_id: str, queue: asyncio.Queue) -> int:
-        subscribers = self.workspace_subs.get(device_id)
-        if not subscribers:
-            return 0
-        subscribers.discard(queue)
-        remaining = len(subscribers)
-        if remaining == 0:
-            self.workspace_subs.pop(device_id, None)
-        return remaining
-
-    def workspace_subscriber_count(self, device_id: str) -> int:
-        return len(self.workspace_subs.get(device_id, set()))
 
     async def open_transfer(self, device_id: str, transfer_id: str) -> Transfer:
         link = self.links.get(device_id)
