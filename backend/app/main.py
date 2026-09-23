@@ -1452,7 +1452,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if first:
                 await registry.send_json(
                     device_id,
-                    P.envelope(P.START_SCREEN_STREAM, device_id, {"fps": 5, "quality": 60, "max_width": 720}),
+                    P.envelope(P.START_SCREEN_STREAM, device_id, {"fps": 4, "quality": 55, "max_width": 720}),
                 )
             await websocket.send_json({"type": "STATUS", "payload": {"online": True, "streaming": True}})
             while True:

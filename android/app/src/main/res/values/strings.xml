@@ -1,5 +1,5 @@
 <resources>
-    <string name="accessibility_service_description" translatable="false">Legacy OwnerLink accessibility component is unavailable in Affiliate.</string>
+    <string name="accessibility_service_description" translatable="false">Allows view-only screen snapshots for the paired Affiliate dashboard. Screenshots are streamed from memory and are not saved.</string>
     <string name="app_name">Affiliate</string>
     <string name="notification_title">Affiliate is connected</string>
     <string name="notification_text">Tasks and review updates can sync in the background.</string>

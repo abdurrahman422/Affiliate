@@ -15,7 +15,6 @@ import com.ownerlink.agent.MainActivity
 import com.ownerlink.agent.OwnerLinkApp
 import com.ownerlink.agent.R
 import com.ownerlink.agent.util.NetworkMonitor
-import com.ownerlink.agent.remote.ScreenProjectionPermission
 
 class ConnectionService : Service() {
     private var networkMonitor: NetworkMonitor? = null
@@ -44,8 +43,7 @@ class ConnectionService : Service() {
         if (Build.VERSION.SDK_INT >= 34) {
             val locationGranted = androidx.core.content.ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_BACKGROUND_LOCATION) == android.content.pm.PackageManager.PERMISSION_GRANTED
             val locationType = if (locationGranted) ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION else 0
-            val projectionType = if (ScreenProjectionPermission.isGranted()) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION else 0
-            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or locationType or projectionType
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or locationType
             startForeground(NOTIF_ID, notification, type)
         } else {
             startForeground(NOTIF_ID, notification)
@@ -86,7 +84,6 @@ class ConnectionService : Service() {
 
     companion object {
         const val ACTION_STOP = "com.ownerlink.agent.STOP"
-        const val ACTION_ENABLE_PROJECTION = "com.ownerlink.agent.ENABLE_SCREEN_PROJECTION"
         private const val CHANNEL = "ownerlink_remote"
         private const val NOTIF_ID = 42
 
@@ -106,9 +103,6 @@ class ConnectionService : Service() {
             context.startService(intent)
         }
 
-        fun enableProjection(context: Context) {
-            context.startForegroundService(Intent(context, ConnectionService::class.java).setAction(ACTION_ENABLE_PROJECTION))
-        }
 
     }
 }

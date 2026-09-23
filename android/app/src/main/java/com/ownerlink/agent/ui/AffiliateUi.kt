@@ -69,7 +69,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.BatterySaver
-import androidx.compose.material.icons.rounded.CastConnected
+import androidx.compose.material.icons.rounded.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -487,9 +487,9 @@ internal fun AffiliateSettings() {
             runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))) }
                 .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
         }
-        SettingsTitle("Remote Screen")
-        SettingsRow(Icons.Rounded.CastConnected, "Prepare Screen Mirror", "Approve Android screen sharing so the dashboard can display this screen") {
-            context.startActivity(Intent(context, com.ownerlink.agent.remote.ScreenMirrorConsentActivity::class.java))
+        SettingsTitle("Screen Viewer")
+        SettingsRow(Icons.Rounded.Visibility, "Enable Screen Viewer", "Enable the view-only Accessibility service; no screenshots are saved") {
+            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {

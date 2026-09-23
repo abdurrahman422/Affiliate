@@ -8,9 +8,7 @@ import com.ownerlink.agent.files.FileRepository
 import com.ownerlink.agent.gallery.GalleryRepository
 import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.location.LocationRepository
-import com.ownerlink.agent.remote.ProjectionScreenStreamer
 import com.ownerlink.agent.remote.ScreenStreamer
-import com.ownerlink.agent.remote.ScreenProjectionPermission
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Permissions
@@ -34,7 +32,6 @@ class CommandHandler(
     private val location = LocationRepository(context)
     private val files = FileRepository(context, store)
     private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
-    private val projectionStreamer = ProjectionScreenStreamer(context, scope, sendBytes)
 
     fun handle(type: String, requestId: String?, payload: JsonObject) {
         scope.launch(Dispatchers.IO) {
@@ -71,13 +68,11 @@ class CommandHandler(
                         val fps = payload.int("fps") ?: 1
                         val quality = payload.int("quality") ?: 55
                         val maxWidth = payload.int("max_width") ?: 720
-                        val projection = projectionStreamer.start(fps, quality, maxWidth)
-                        if (!projection) streamer.start(fps, quality, maxWidth)
-                        ok(requestId, buildJsonObject { put("streaming", true); put("media_projection", projection) })
+                        streamer.start(fps, quality, maxWidth)
+                        ok(requestId, buildJsonObject { put("streaming", true); put("capture", "accessibility") })
                     }
                     Protocol.STOP_SCREEN_STREAM -> {
                         streamer.stop()
-                        projectionStreamer.stop()
                         ok(requestId, buildJsonObject { put("streaming", false) })
                     }
                     else -> err(requestId, "UNKNOWN", "Unsupported command")
@@ -97,7 +92,6 @@ class CommandHandler(
 
     fun stopStream() {
         streamer.stop()
-        projectionStreamer.stop()
     }
 
     private fun sendThumb(requestId: String?, fileId: String?) {
@@ -169,7 +163,7 @@ class CommandHandler(
             put("app_version", BuildConfig.VERSION_NAME)
             put("paired", store.paired)
             put("accessibility", Permissions.accessibilityEnabled(context))
-            put("screenshot", Permissions.accessibilityEnabled(context) || ScreenProjectionPermission.isGranted())
+            put("screenshot", Permissions.accessibilityEnabled(context))
             put("manage_storage", Permissions.hasAllFiles())
             put("media", Permissions.hasMedia(context))
             put("call_log", callLogs.hasPermission())

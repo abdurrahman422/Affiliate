@@ -25,7 +25,9 @@ class ScreenStreamer(
     private val streamId = UUID(0, 0)
 
     fun start(fps: Int, quality: Int, maxWidth: Int) {
-        val interval = (1000L / fps.coerceIn(1, 2))
+        // Accessibility screenshots are captured directly into RAM and relayed without files.
+        // Calls are strictly sequential, so a slow device naturally runs below the 4 FPS ceiling.
+        val interval = (1000L / fps.coerceIn(1, 4))
         if (running.getAndSet(true)) {
             requestImmediate()
             return
