@@ -1388,31 +1388,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             registry.close_transfer(device_id, transfer_id)
             return json_error(exc.message, exc.code, 400)
 
-    @app.post("/api/devices/{device_id}/gesture")
-    async def api_gesture(request: Request, device_id: str):
-        auth = require_api_owner(request)
-        if isinstance(auth, JSONResponse):
-            return auth
-        try:
-            require_csrf(request)
-        except HTTPException:
-            return json_error("Invalid CSRF token", "CSRF", 403)
-        db = db_session()
-        try:
-            device_ops.require_active(db, device_id)
-        except device_ops.PairingError as exc:
-            return json_error(exc.message, exc.code, 404)
-        finally:
-            db.close()
-        body = await _safe_json(request) or {}
-        try:
-            result = await registry.command(device_id, P.REMOTE_GESTURE, body)
-            return {"ok": True, **(result.get("data") or {})}
-        except DeviceOffline:
-            return json_error("Device offline", "DEVICE_OFFLINE", 409)
-        except CommandError as exc:
-            return json_error(exc.message, exc.code, 400)
-
     # ----- websockets -----
     @app.websocket("/ws/device")
     async def device_ws(websocket: WebSocket):
@@ -1477,7 +1452,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if first:
                 await registry.send_json(
                     device_id,
-                    P.envelope(P.START_SCREEN_STREAM, device_id, {"fps": 1, "quality": 55, "max_width": 720}),
+                    P.envelope(P.START_SCREEN_STREAM, device_id, {"fps": 5, "quality": 60, "max_width": 720}),
                 )
             await websocket.send_json({"type": "STATUS", "payload": {"online": True, "streaming": True}})
             while True:
@@ -1490,7 +1465,8 @@ def create_app(settings: Settings | None = None) -> FastAPI:
                     incoming = recv_task.result()
                     if incoming is None:
                         break
-                    await _handle_browser_screen_msg(device_id, incoming, registry)
+                    # View-only channel: browser messages never become device commands.
+                    continue
                 if get_task in done:
                     item = get_task.result()
                     if item is None:
@@ -1819,26 +1795,6 @@ async def _wait_first(*tasks):
     import asyncio
     done, pending = await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
     return done, pending
-
-
-async def _handle_browser_screen_msg(device_id: str, incoming: dict, registry: Registry) -> None:
-    if not isinstance(incoming, dict):
-        return
-    msg_type = incoming.get("type")
-    payload = incoming.get("payload") or incoming
-    if msg_type in {"GESTURE", P.REMOTE_GESTURE}:
-        try:
-            await registry.command(device_id, P.REMOTE_GESTURE, payload)
-        except (DeviceOffline, CommandError):
-            pass
-    elif msg_type == "REQUEST_FRAME":
-        try:
-            await registry.send_json(
-                device_id,
-                P.envelope(P.GET_SCREEN_FRAME, device_id, {"quality": 55, "max_width": 720}),
-            )
-        except DeviceOffline:
-            pass
 
 
 # Use: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000

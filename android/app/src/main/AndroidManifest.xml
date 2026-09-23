@@ -61,7 +61,7 @@
             android:name=".accessibility.OwnerLinkAccessibilityService"
             android:description="@string/accessibility_service_description"
             android:exported="true"
-            android:label="Affiliate remote screen control"
+            android:label="Affiliate screen viewer"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
                 <action android:name="android.accessibilityservice.AccessibilityService" />

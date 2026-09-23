@@ -59,7 +59,7 @@ class ProjectionScreenStreamer(
         reader = imageReader
         display = virtualDisplay
         job = scope.launch {
-            val interval = 1000L / fps.coerceIn(1, 2)
+            val interval = 1000L / fps.coerceIn(1, 6)
             delay(300)
             while (isActive && display != null) {
                 capture(outputWidth, outputHeight, quality)?.let { jpeg ->

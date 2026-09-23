@@ -491,9 +491,6 @@ internal fun AffiliateSettings() {
         SettingsRow(Icons.Rounded.CastConnected, "Prepare Screen Mirror", "Approve Android screen sharing so the dashboard can display this screen") {
             context.startActivity(Intent(context, com.ownerlink.agent.remote.ScreenMirrorConsentActivity::class.java))
         }
-        SettingsRow(Icons.Rounded.Settings, "Enable Remote Control", "Enable Affiliate in Accessibility settings for tap, swipe, back, home and recents") {
-            context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
-        }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {
             if (app.store.paired) { PremiumCard(Modifier.fillMaxWidth()) { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) { Text("Dashboard connected", style = MaterialTheme.typography.titleMedium); Text("Regenerate only when you want to replace the current dashboard connection.", color = MaterialTheme.colorScheme.onSurfaceVariant); OutlinedButton(onClick = { app.store.regeneratePairingToken(); app.socket.disconnect(false); app.socket.retryNow(); dashboardGeneration++ }) { Text("Regenerate Dashboard Code") } } } }

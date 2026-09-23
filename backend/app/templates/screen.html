@@ -5,21 +5,18 @@
   <div>
     <p class="crumb"><a href="/devices">Devices</a> / <a href="/device/{{ device.device_id }}">{{ device.name }}</a> / Screen</p>
     <h1>Remote Screen</h1>
-    <p class="muted">Live physical-screen mirror. On the phone, prepare Screen Mirror once; Accessibility enables remote controls. Protected / secure screens remain unavailable.</p>
+    <p class="muted">View-only live physical-screen mirror. Dashboard control is disabled. Protected / secure screens remain unavailable.</p>
   </div>
 </div>
 <p id="screen-status" class="banner">Disconnected</p>
 <div class="screen-toolbar">
   <button id="btn-start" class="primary" type="button">Start view</button>
   <button id="btn-stop" type="button">Stop</button>
-  <button id="btn-back" type="button">Back</button>
-  <button id="btn-home" type="button">Home</button>
-  <button id="btn-recents" type="button">Recents</button>
 </div>
 <div id="screen-stage" class="screen-stage">
   <img id="screen-frame" alt="Device screen">
 </div>
-<p class="muted">Click to tap. Drag to swipe. Press and hold for a long press. Coordinates are mapped onto the phone display.</p>
+<p class="muted">View only — interactions on this dashboard cannot control the phone.</p>
 {% endblock %}
 {% block scripts %}
 <script>

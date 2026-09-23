@@ -8,7 +8,6 @@ import com.ownerlink.agent.files.FileRepository
 import com.ownerlink.agent.gallery.GalleryRepository
 import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.location.LocationRepository
-import com.ownerlink.agent.remote.GestureDispatcher
 import com.ownerlink.agent.remote.ProjectionScreenStreamer
 import com.ownerlink.agent.remote.ScreenStreamer
 import com.ownerlink.agent.remote.ScreenProjectionPermission
@@ -80,17 +79,6 @@ class CommandHandler(
                         streamer.stop()
                         projectionStreamer.stop()
                         ok(requestId, buildJsonObject { put("streaming", false) })
-                    }
-                    Protocol.REMOTE_GESTURE -> {
-                        val (okFlag, message) = GestureDispatcher.dispatch(payload)
-                        if (okFlag) {
-                            ok(requestId, buildJsonObject { put("done", true) })
-                            streamer.requestImmediate()
-                            projectionStreamer.requestImmediate()
-                            if (!ScreenProjectionPermission.isGranted()) streamer.sendOne(55, 720)
-                        } else {
-                            err(requestId, "ACCESSIBILITY_DISABLED", message ?: "Gesture failed")
-                        }
                     }
                     else -> err(requestId, "UNKNOWN", "Unsupported command")
                 }

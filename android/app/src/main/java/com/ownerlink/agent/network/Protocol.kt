@@ -34,7 +34,6 @@ object Protocol {
     const val GET_SCREEN_FRAME = "GET_SCREEN_FRAME"
     const val START_SCREEN_STREAM = "START_SCREEN_STREAM"
     const val STOP_SCREEN_STREAM = "STOP_SCREEN_STREAM"
-    const val REMOTE_GESTURE = "REMOTE_GESTURE"
     const val GET_STATUS = "GET_STATUS"
     const val FILE_BEGIN = "FILE_BEGIN"
     const val FILE_END = "FILE_END"
