@@ -69,6 +69,7 @@ import androidx.compose.material.icons.rounded.Description
 import androidx.compose.material.icons.rounded.Stars
 import androidx.compose.material.icons.rounded.LocationOn
 import androidx.compose.material.icons.rounded.BatterySaver
+import androidx.compose.material.icons.rounded.CastConnected
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
@@ -485,6 +486,10 @@ internal fun AffiliateSettings() {
         SettingsRow(Icons.Rounded.BatterySaver, "Keep Affiliate Running", "Remove battery restrictions for reliable background connection") {
             runCatching { context.startActivity(Intent(android.provider.Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:${context.packageName}"))) }
                 .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+        }
+        SettingsTitle("Remote Workspace")
+        SettingsRow(Icons.Rounded.CastConnected, "Prepare Remote Workspace", "Approve Android's screen-sharing prompt before using the dashboard") {
+            context.startActivity(Intent(context, com.ownerlink.agent.remote.WorkspaceConsentActivity::class.java))
         }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }
         if (showDashboard) {

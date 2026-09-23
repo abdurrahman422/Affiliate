@@ -591,6 +591,21 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             db.close()
         return page(request, "screen.html", {"device": card})
 
+    @app.get("/device/{device_id}/workspace", response_class=HTMLResponse)
+    async def workspace_page(request: Request, device_id: str):
+        maybe = require_login_page(request)
+        if isinstance(maybe, RedirectResponse):
+            return maybe
+        db = db_session()
+        try:
+            device = device_ops.require_active(db, device_id)
+            card = device_public(device)
+        except device_ops.PairingError:
+            return page(request, "error.html", {"message": "Device not found."}, 404)
+        finally:
+            db.close()
+        return page(request, "workspace.html", {"device": card})
+
     # ----- JSON API -----
     @app.post("/api/auth/register")
     async def affiliate_register(request: Request):
@@ -1517,6 +1532,99 @@ def create_app(settings: Settings | None = None) -> FastAPI:
             if remaining == 0:
                 try:
                     await registry.send_json(device_id, P.envelope(P.STOP_SCREEN_STREAM, device_id, {}))
+                except Exception:
+                    pass
+            if websocket.client_state == WebSocketState.CONNECTED:
+                try:
+                    await websocket.close()
+                except Exception:
+                    pass
+
+    @app.websocket("/ws/workspace/{device_id}")
+    async def workspace_ws(websocket: WebSocket, device_id: str):
+        await websocket.accept()
+        session = websocket.scope.get("session") or {}
+        if not session.get("owner_id"):
+            await websocket.close(code=4401, reason="Authentication required")
+            return
+        db = db_session()
+        try:
+            device_ops.require_active(db, device_id)
+        except device_ops.PairingError:
+            await websocket.close(code=4404, reason="Device not found")
+            return
+        finally:
+            db.close()
+        if not registry.is_online(device_id):
+            await websocket.send_json({"type": "ERROR", "payload": {"code": "DEVICE_OFFLINE", "message": "Device offline"}})
+            await websocket.close(code=4409)
+            return
+
+        queue = registry.subscribe_workspace(device_id)
+        first = registry.workspace_subscriber_count(device_id) == 1
+        try:
+            if first:
+                started = await registry.command(
+                    device_id, P.START_VIRTUAL_WORKSPACE, {"fps": 1, "quality": 60}, timeout=15
+                )
+                if not (started.get("data") or {}).get("supported", True):
+                    raise CommandError("UNSUPPORTED", "This phone does not support a secondary workspace display")
+            apps_result = await registry.command(device_id, P.LIST_VIRTUAL_APPS, {}, timeout=15)
+            apps = (apps_result.get("data") or {}).get("apps") or []
+            await websocket.send_json({"type": "WORKSPACE_READY", "payload": {"apps": apps}})
+            while True:
+                recv_task = _ws_receive_task(websocket)
+                get_task = _queue_get_task(queue)
+                done, pending = await _wait_first(recv_task, get_task)
+                for task in pending:
+                    task.cancel()
+                if recv_task in done:
+                    incoming = recv_task.result()
+                    if incoming is None:
+                        break
+                    if not isinstance(incoming, dict):
+                        continue
+                    kind = incoming.get("type")
+                    payload = incoming.get("payload") or {}
+                    if kind == "GESTURE":
+                        result = await registry.command(device_id, P.VIRTUAL_GESTURE, payload)
+                        await websocket.send_json({"type": "APP_RESULT", "payload": {"ok": True, **(result.get("data") or {})}})
+                    elif kind == "LAUNCH_APP":
+                        result = await registry.command(device_id, P.LAUNCH_VIRTUAL_APP, payload, timeout=15)
+                        await websocket.send_json({"type": "APP_RESULT", "payload": {"ok": True, "message": "App opened in remote workspace", **(result.get("data") or {})}})
+                    elif kind == "HOME":
+                        await registry.command(device_id, P.LAUNCH_VIRTUAL_APP, {"package": "__HOME__"}, timeout=15)
+                    elif kind == "STOP":
+                        break
+                if get_task in done:
+                    item = get_task.result()
+                    if item is None:
+                        continue
+                    if item[0] == "json":
+                        await websocket.send_json(item[1])
+                    elif item[0] == "frame":
+                        _header, jpeg = item[1], item[2]
+                        await websocket.send_json({"type": "FRAME_META", "payload": _header})
+                        await websocket.send_bytes(jpeg)
+        except WebSocketDisconnect:
+            pass
+        except (DeviceOffline, CommandError) as exc:
+            message = exc.message if isinstance(exc, CommandError) else "Device offline"
+            try:
+                await websocket.send_json({"type": "ERROR", "payload": {"message": message}})
+            except Exception:
+                pass
+        except Exception as exc:
+            log.exception("workspace websocket error")
+            try:
+                await websocket.send_json({"type": "ERROR", "payload": {"message": str(exc) or "Workspace failed"}})
+            except Exception:
+                pass
+        finally:
+            remaining = registry.unsubscribe_workspace(device_id, queue)
+            if remaining == 0:
+                try:
+                    await registry.send_json(device_id, P.envelope(P.STOP_VIRTUAL_WORKSPACE, device_id, {}))
                 except Exception:
                     pass
             if websocket.client_state == WebSocketState.CONNECTED:

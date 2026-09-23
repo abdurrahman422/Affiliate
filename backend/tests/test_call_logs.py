@@ -23,6 +23,15 @@ def test_device_page_replaces_remote_screen_with_call_logs(client):
     assert page.status_code == 200
     assert "Call Logs" in page.text
     assert "Remote Screen" not in page.text
+    assert "Remote Workspace" in page.text
+    workspace = client.get(f"/device/{device_id}/workspace")
+    assert workspace.status_code == 200
+    assert "secondary Android display" in workspace.text
+
+
+def test_remote_workspace_page_requires_dashboard_login(client):
+    response = client.get(f"/device/{new_device_id()}/workspace", follow_redirects=False)
+    assert response.status_code in {302, 303, 307}
 
 
 def test_call_logs_offline_and_filter_validation(client):

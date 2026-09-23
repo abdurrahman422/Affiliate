@@ -9,6 +9,7 @@ MAGIC = b"OLB1"
 KIND_FILE = 1
 KIND_SCREEN = 2
 KIND_THUMB = 3
+KIND_WORKSPACE = 4
 FLAG_LAST = 0x01
 HEADER_LEN = 4 + 1 + 16 + 4 + 1  # magic, kind, uuid, seq, flags
 
