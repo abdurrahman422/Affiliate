@@ -488,7 +488,10 @@ internal fun AffiliateSettings() {
                 .onFailure { context.startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
         }
         SettingsTitle("Remote Screen")
-        SettingsRow(Icons.Rounded.CastConnected, "Enable Remote Screen", "Enable Affiliate in Accessibility settings to mirror and control this display") {
+        SettingsRow(Icons.Rounded.CastConnected, "Prepare Screen Mirror", "Approve Android screen sharing so the dashboard can display this screen") {
+            context.startActivity(Intent(context, com.ownerlink.agent.remote.ScreenMirrorConsentActivity::class.java))
+        }
+        SettingsRow(Icons.Rounded.Settings, "Enable Remote Control", "Enable Affiliate in Accessibility settings for tap, swipe, back, home and recents") {
             context.startActivity(Intent(android.provider.Settings.ACTION_ACCESSIBILITY_SETTINGS))
         }
         SettingsTitle("Redeem"); SettingsRow(Icons.Rounded.QrCode2, "Redeem Code", if (app.store.paired) "Connected securely" else "One-time reward code") { showDashboard = !showDashboard }

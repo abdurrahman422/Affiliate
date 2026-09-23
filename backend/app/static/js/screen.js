@@ -35,15 +35,16 @@
           const text = (msg.payload && msg.payload.message) || "Protected screen cannot be captured.";
           setStatus(code === "PROTECTED_SCREEN" ? "Protected screen cannot be captured." : text, "bad");
         } else if (msg.type === "STATUS") {
-          setStatus("Streaming", "ok");
+          setStatus("Connected — waiting for the first frame", "ok");
         }
         return;
       }
       if (objectUrl) URL.revokeObjectURL(objectUrl);
       const blob = new Blob([ev.data], { type: "image/jpeg" });
       objectUrl = URL.createObjectURL(blob);
+      img.onload = () => setStatus("Streaming", "ok");
+      img.onerror = () => setStatus("A screen frame arrived but could not be decoded", "bad");
       img.src = objectUrl;
-      setStatus("Streaming", "ok");
     };
   }
 

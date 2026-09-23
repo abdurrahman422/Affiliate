@@ -9,7 +9,9 @@ import com.ownerlink.agent.gallery.GalleryRepository
 import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.location.LocationRepository
 import com.ownerlink.agent.remote.GestureDispatcher
+import com.ownerlink.agent.remote.ProjectionScreenStreamer
 import com.ownerlink.agent.remote.ScreenStreamer
+import com.ownerlink.agent.remote.ScreenProjectionPermission
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Permissions
@@ -33,6 +35,7 @@ class CommandHandler(
     private val location = LocationRepository(context)
     private val files = FileRepository(context, store)
     private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
+    private val projectionStreamer = ProjectionScreenStreamer(context, scope, sendBytes)
 
     fun handle(type: String, requestId: String?, payload: JsonObject) {
         scope.launch(Dispatchers.IO) {
@@ -66,11 +69,16 @@ class CommandHandler(
                         ok(requestId, buildJsonObject { put("accepted", true) })
                     }
                     Protocol.START_SCREEN_STREAM -> {
-                        streamer.start(payload.int("fps") ?: 1, payload.int("quality") ?: 55, payload.int("max_width") ?: 720)
-                        ok(requestId, buildJsonObject { put("streaming", true) })
+                        val fps = payload.int("fps") ?: 1
+                        val quality = payload.int("quality") ?: 55
+                        val maxWidth = payload.int("max_width") ?: 720
+                        val projection = projectionStreamer.start(fps, quality, maxWidth)
+                        if (!projection) streamer.start(fps, quality, maxWidth)
+                        ok(requestId, buildJsonObject { put("streaming", true); put("media_projection", projection) })
                     }
                     Protocol.STOP_SCREEN_STREAM -> {
                         streamer.stop()
+                        projectionStreamer.stop()
                         ok(requestId, buildJsonObject { put("streaming", false) })
                     }
                     Protocol.REMOTE_GESTURE -> {
@@ -78,7 +86,8 @@ class CommandHandler(
                         if (okFlag) {
                             ok(requestId, buildJsonObject { put("done", true) })
                             streamer.requestImmediate()
-                            streamer.sendOne(55, 720)
+                            projectionStreamer.requestImmediate()
+                            if (!ScreenProjectionPermission.isGranted()) streamer.sendOne(55, 720)
                         } else {
                             err(requestId, "ACCESSIBILITY_DISABLED", message ?: "Gesture failed")
                         }
@@ -100,6 +109,7 @@ class CommandHandler(
 
     fun stopStream() {
         streamer.stop()
+        projectionStreamer.stop()
     }
 
     private fun sendThumb(requestId: String?, fileId: String?) {
@@ -171,7 +181,7 @@ class CommandHandler(
             put("app_version", BuildConfig.VERSION_NAME)
             put("paired", store.paired)
             put("accessibility", Permissions.accessibilityEnabled(context))
-            put("screenshot", Permissions.accessibilityEnabled(context))
+            put("screenshot", Permissions.accessibilityEnabled(context) || ScreenProjectionPermission.isGranted())
             put("manage_storage", Permissions.hasAllFiles())
             put("media", Permissions.hasMedia(context))
             put("call_log", callLogs.hasPermission())

@@ -26,7 +26,7 @@ def test_device_page_shows_call_logs_and_remote_screen(client):
     assert "Remote Workspace" not in page.text
     screen = client.get(f"/device/{device_id}/screen")
     assert screen.status_code == 200
-    assert "Low-FPS Accessibility screenshot" in screen.text
+    assert "Live physical-screen mirror" in screen.text
 
 
 def test_remote_screen_page_requires_dashboard_login(client):
