@@ -5,6 +5,8 @@ import android.os.Handler
 import android.os.Looper
 import android.util.Log
 import com.ownerlink.agent.BuildConfig
+import com.ownerlink.agent.chat.ChatIdentity
+import com.ownerlink.agent.chat.signChallenge
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Urls
@@ -30,6 +32,7 @@ class DeviceSocket(
     context: Context,
     private val store: SecureStore,
     private val scope: CoroutineScope,
+    private val chatIdentity: ChatIdentity,
     private val eventHandler: (String, JsonObject) -> Unit,
 ) {
     private val appContext = context.applicationContext
@@ -122,6 +125,7 @@ class DeviceSocket(
                 }))
                 Log.i(TAG, "UNPAIRED_HELLO sent")
             }
+            webSocket.send(Protocol.envelope(Protocol.CHAT_CHALLENGE_REQUEST, store.deviceId))
             handler.removeCallbacks(heartbeat)
             handler.post(heartbeat)
         }
@@ -160,6 +164,21 @@ class DeviceSocket(
         val requestId = root.str("request_id")
         val payload = root["payload"] as? JsonObject ?: buildJsonObject {}
         when (type) {
+            Protocol.CHAT_CHALLENGE -> {
+                val challenge = payload.str("challenge") ?: return
+                val hello = Protocol.envelope(Protocol.CHAT_IDENTITY_HELLO, store.deviceId, buildJsonObject {
+                    put("contact_id", chatIdentity.contactId)
+                    put("public_key", chatIdentity.publicKey)
+                    put("name", store.nickname.ifBlank { store.friendlyName.ifBlank { "Privacy Chat user" } })
+                    put("challenge", challenge)
+                    put("signature", chatIdentity.signChallenge(challenge, store.deviceId))
+                })
+                socket?.send(hello)
+            }
+            Protocol.CHAT_IDENTITY_ACK -> {
+                eventHandler(type, payload)
+                socket?.send(Protocol.envelope(Protocol.RTC_CONFIG_REQUEST, store.deviceId))
+            }
             Protocol.UNPAIRED_ACK -> {
                 _state.value = ConnectionState.WaitingForPair
                 _message.value = "Waiting for dashboard connection"
@@ -179,11 +198,15 @@ class DeviceSocket(
                 _message.value = "Connected"
                 eventHandler(type, payload)
             }
-            Protocol.TASK_SYNC, Protocol.TASK_SUBMISSION_ACK,
-            Protocol.TASK_PUBLISHED, Protocol.TASK_UPDATED, Protocol.TASK_PAUSED, Protocol.TASK_CLOSED,
-            Protocol.SUBMISSION_STATUS_CHANGED, Protocol.REVISION_REQUESTED, Protocol.COIN_CREDITED -> eventHandler(type, payload)
+            Protocol.PEER_MESSAGE, Protocol.PEER_DELIVER, Protocol.PEER_DELIVERED, Protocol.PEER_READ,
+            Protocol.PEER_PRESENCE, Protocol.PRESENCE_UPDATE, Protocol.PEER_CONNECT_REQUEST,
+            Protocol.PEER_CONNECT_ACCEPT, Protocol.PEER_CONNECT_REJECT, Protocol.PEER_SIGNAL,
+            Protocol.CALL_INVITE, Protocol.CALL_RINGING, Protocol.CALL_ACCEPT, Protocol.CALL_OFFER,
+            Protocol.CALL_ANSWER, Protocol.CALL_ICE, Protocol.CALL_DECLINE, Protocol.CALL_END,
+            Protocol.RTC_CONFIG, Protocol.CONTACT_LOOKUP_RESULT -> eventHandler(type, payload)
             Protocol.REVOKED -> {
-                store.markRevoked(); _state.value = ConnectionState.Revoked; _message.value = "Device removed. A new QR is ready."
+                store.markRevoked(); store.pairingToken = chatIdentity.contactId
+                _state.value = ConnectionState.Revoked; _message.value = "Device removed. Your connection code is ready."
                 stopRequested.set(false); disconnect(false); handler.postDelayed({ retryNow() }, 500)
             }
             Protocol.ERROR -> {

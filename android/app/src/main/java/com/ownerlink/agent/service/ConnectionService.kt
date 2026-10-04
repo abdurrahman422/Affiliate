@@ -62,7 +62,7 @@ class ConnectionService : Service() {
     private fun createChannel() {
         val mgr = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         mgr.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Affiliate connection", NotificationManager.IMPORTANCE_LOW),
+            NotificationChannel(CHANNEL, "Privacy Chat connection", NotificationManager.IMPORTANCE_LOW),
         )
     }
 

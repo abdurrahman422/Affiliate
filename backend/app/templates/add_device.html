@@ -1,12 +1,12 @@
 {% extends "base.html" %}
-{% block title %}Redeem Device — Affiliate{% endblock %}
+{% block title %}Connect Device — Privacy Chat{% endblock %}
 {% block content %}
-<div class="page-head"><div><h1>Redeem Code</h1><p class="muted">Copy the one-time Redeem Code from the Affiliate app and paste it here.</p></div></div>
+<div class="page-head"><div><h1>Connect Device</h1><p class="muted">Copy the 22-character connection code from Privacy Chat and paste it here.</p></div></div>
 <section class="card form-card">
   <label>Friendly name (optional)<input id="device-name" type="text" placeholder="My Phone"></label>
-  <label>Redeem Code<input id="pair-json" type="text" maxlength="64" autocomplete="off" placeholder="24-character one-time code"></label>
-  <button id="pair-btn" class="primary" type="button">Redeem and Connect</button>
+  <label>Connection Code<input id="pair-json" type="text" minlength="22" maxlength="22" autocomplete="off" autocapitalize="none" spellcheck="false" placeholder="22-character connection code"></label>
+  <button id="pair-btn" class="primary" type="button">Connect</button>
   <p id="pair-result" class="meta" role="status"></p>
 </section>
 {% endblock %}
-{% block scripts %}<script src="/static/js/pair.js?v=redeem-2"></script>{% endblock %}
+{% block scripts %}<script src="/static/js/pair.js?v=privacy-chat-1"></script>{% endblock %}

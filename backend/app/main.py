@@ -1641,6 +1641,27 @@ async def _handle_device_text(websocket: WebSocket, data: dict, state: dict, Ses
         await websocket.send_json(P.envelope(P.RTC_CONFIG, link.device_id, create_ice_configuration(registry.settings, subject)))
         return
 
+    if msg_type == P.CONTACT_LOOKUP:
+        if not link.contact_id:
+            await websocket.send_json(P.envelope(P.ERROR, link.device_id, {
+                "code": "CHAT_IDENTITY_REQUIRED", "message": "Chat identity is not ready"
+            }, data.get("request_id")))
+            return
+        target = str(payload.get("contact_id") or "").strip()
+        value = registry.contact_public(target) if 8 <= len(target) <= 128 else None
+        if value is None and registry.settings.uses_redis:
+            db = SessionLocal()
+            try:
+                value = db.get_contact(target) if isinstance(db, RedisStore) else None
+            finally:
+                db.close()
+        safe = value if value is not None and target != link.contact_id else None
+        await websocket.send_json(P.envelope(P.CONTACT_LOOKUP_RESULT, link.device_id, {
+            "contact_id": target, "found": safe is not None,
+            **({"public_key": safe["public_key"], "name": safe["name"]} if safe else {}),
+        }, data.get("request_id")))
+        return
+
     if msg_type == P.TASK_SYNC_REQUEST:
         try:
             cursor = max(0, int(payload.get("cursor") or 0))
@@ -1734,7 +1755,9 @@ def _b64url_decode(value: str) -> bytes:
 def _verify_chat_identity(contact_id: str, public_key: str, signature: str, challenge: str, device_id: str) -> bool:
     try:
         public_bytes = _b64url_decode(public_key)
-        derived = base64.urlsafe_b64encode(hashlib.sha256(public_bytes).digest()[:18]).decode().rstrip("=")
+        # The Android client uses the first 16 digest bytes, encoded without
+        # padding, which is exactly a 22-character URL-safe connection code.
+        derived = base64.urlsafe_b64encode(hashlib.sha256(public_bytes).digest()[:16]).decode().rstrip("=")
         if not secrets.compare_digest(derived, contact_id):
             return False
         key = serialization.load_der_public_key(public_bytes)

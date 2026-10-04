@@ -123,6 +123,22 @@ class SecureStore(private val context: Context) {
         get() = prefs().getString(KEY_NAME, "") ?: ""
         set(value) { prefs().edit().putString(KEY_NAME, value).apply() }
 
+    var firstName: String
+        get() = prefs().getString(KEY_FIRST_NAME, "") ?: ""
+        set(value) { prefs().edit().putString(KEY_FIRST_NAME, value).apply() }
+
+    var lastName: String
+        get() = prefs().getString(KEY_LAST_NAME, "") ?: ""
+        set(value) { prefs().edit().putString(KEY_LAST_NAME, value).apply() }
+
+    var nickname: String
+        get() = prefs().getString(KEY_NICKNAME, "") ?: ""
+        set(value) { prefs().edit().putString(KEY_NICKNAME, value).apply() }
+
+    var phoneNumber: String
+        get() = prefs().getString(KEY_PHONE_NUMBER, "") ?: ""
+        set(value) { prefs().edit().putString(KEY_PHONE_NUMBER, value).apply() }
+
     var paired: Boolean
         get() = prefs().getBoolean(KEY_PAIRED, false)
         set(value) { prefs().edit().putBoolean(KEY_PAIRED, value).apply() }
@@ -203,6 +219,10 @@ class SecureStore(private val context: Context) {
         private const val KEY_PAIRING = "pairing_token"
         private const val KEY_SESSION = "session_token"
         private const val KEY_NAME = "friendly_name"
+        private const val KEY_FIRST_NAME = "privacy_first_name"
+        private const val KEY_LAST_NAME = "privacy_last_name"
+        private const val KEY_NICKNAME = "privacy_nickname"
+        private const val KEY_PHONE_NUMBER = "privacy_phone_number"
         private const val KEY_PAIRED = "paired"
         private const val KEY_DASHBOARD_LAST = "dashboard_last_connected"
         private const val KEY_SERVICE = "service_wanted"

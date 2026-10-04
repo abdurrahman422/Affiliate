@@ -1,21 +1,14 @@
 {% extends "base.html" %}
-{% block title %}Overview — Affiliate{% endblock %}
+{% block title %}Overview — Privacy Chat{% endblock %}
 {% block content %}
 <div class="page-head">
-  <div><p class="eyebrow">Operations workspace</p><h1>Overview</h1><p class="muted">Tasks, reviews, rewards, and connected devices at a glance.</p></div>
-  <div class="actions"><a href="/devices/add">Add Device</a><a class="primary" href="/tasks">Create task</a></div>
+  <div><p class="eyebrow">Private device workspace</p><h1>Privacy Chat Dashboard</h1><p class="muted">Securely connect your own devices and access permitted photos, videos, files, location, and call logs.</p></div>
+  <div class="actions"><a class="primary" href="/devices/add">Connect Device</a><a href="/devices">View Devices</a></div>
 </div>
 <div class="metric-grid">
   <article class="metric"><span>Online devices</span><strong>{{ metrics.online_devices }}</strong></article>
-  <article class="metric"><span>Active tasks</span><strong>{{ metrics.active_tasks }}</strong></article>
-  <article class="metric"><span>Pending reviews</span><strong>{{ metrics.pending_reviews }}</strong></article>
-  <article class="metric"><span>Approved today</span><strong>{{ metrics.approved_today }}</strong></article>
-  <article class="metric"><span>Rejected today</span><strong>{{ metrics.rejected_today }}</strong></article>
-  <article class="metric"><span>Coins credited today</span><strong>{{ metrics.coins_credited_today }}</strong></article>
+  <article class="metric"><span>Device access</span><strong>Private</strong></article>
+  <article class="metric"><span>Chat archive</span><strong>Local only</strong></article>
 </div>
-<section class="section-head"><div><h2>Recent submissions</h2><p class="muted">Latest work across eligible devices.</p></div><a href="/submissions">View all</a></section>
-<div class="table-wrap"><table class="file-table"><thead><tr><th>Task</th><th>Worker</th><th>Status</th><th>Submitted</th></tr></thead><tbody>
-{% for item in recent %}<tr><td>{{ item.task_title or item.task_id }}</td><td>{{ item.user_id }}</td><td><span class="pill status-{{ item.status|lower }}">{{ item.status|replace('_',' ') }}</span></td><td>{{ item.created_at }}</td></tr>{% endfor %}
-{% if not recent %}<tr><td colspan="4" class="empty">No submissions yet.</td></tr>{% endif %}
-</tbody></table></div>
+<section class="card"><h2>Device access</h2><p class="muted">A device must be online and explicitly connected with its 22-character Privacy Chat code. Android permissions continue to control every data source.</p><a class="primary" href="/devices">Open connected devices</a></section>
 {% endblock %}

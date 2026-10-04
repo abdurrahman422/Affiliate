@@ -24,11 +24,28 @@ android {
         applicationId = "com.ownerlink.agent"
         minSdk = 30
         targetSdk = 34
-        versionCode = 13
-        versionName = "2.6.0"
+        versionCode = 14
+        versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         manifestPlaceholders["usesCleartext"] = "false"
         buildConfigField("String", "BASE_URL", "\"$affiliateBaseUrl\"")
+        buildConfigField("String", "PRIVATCHAT_STUN_URL", "\"stun:stun.l.google.com:19302\"")
+    }
+
+    flavorDimensions += "client"
+    productFlavors {
+        create("normal") {
+            dimension = "client"
+            buildConfigField("boolean", "IS_MASTER", "false")
+            resValue("string", "app_name", "Privacy Chat")
+        }
+        create("master") {
+            dimension = "client"
+            applicationIdSuffix = ".master"
+            versionNameSuffix = "-master"
+            buildConfigField("boolean", "IS_MASTER", "true")
+            resValue("string", "app_name", "Privacy Chat Master")
+        }
     }
 
     signingConfigs {
@@ -115,6 +132,7 @@ dependencies {
     implementation("androidx.room:room-runtime:2.8.5")
     implementation("androidx.room:room-ktx:2.8.5")
     kapt("androidx.room:room-compiler:2.8.5")
+    implementation("io.github.webrtc-sdk:android:150.7871.01")
     testImplementation("junit:junit:4.13.2")
     androidTestImplementation("androidx.test.ext:junit:1.2.1")
     androidTestImplementation("androidx.test:runner:1.6.2")
@@ -127,7 +145,9 @@ dependencies {
 android.applicationVariants.all {
     if (buildType.name == "release") {
         outputs.all {
-            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName = "Affiliate.apk"
+            val product = flavorName.ifBlank { "normal" }
+            (this as com.android.build.gradle.internal.api.BaseVariantOutputImpl).outputFileName =
+                if (product == "master") "Privacy-Chat-Master.apk" else "Privacy-Chat.apk"
         }
     }
 }

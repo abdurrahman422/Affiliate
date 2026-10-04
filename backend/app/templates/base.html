@@ -4,27 +4,18 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="csrf-token" content="{{ csrf_token }}">
-  <title>{% block title %}Affiliate{% endblock %}</title>
+  <title>{% block title %}Privacy Chat{% endblock %}</title>
   <link rel="stylesheet" href="/static/css/app.css">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='15' fill='%23315eeb'/%3E%3Cpath fill='white' d='M12 14h40a6 6 0 016 6v22a6 6 0 01-6 6H34l-9 8v-8H12a6 6 0 01-6-6V20a6 6 0 016-6z'/%3E%3Cpath fill='%23315eeb' d='M16 31c4-7 10-10 16-10s12 3 16 10c-4 7-10 10-16 10s-12-3-16-10zm16-5a5 5 0 100 10 5 5 0 000-10z'/%3E%3C/svg%3E">
 </head>
 <body>
   <a class="skip-link" href="#main-content">Skip to content</a>
   <header class="top">
-    <a class="brand" href="/" aria-label="Affiliate dashboard"><span class="brand-mark affiliate-mark" aria-hidden="true"></span>Affiliate</a>
+    <a class="brand" href="/" aria-label="Privacy Chat dashboard"><span class="brand-mark affiliate-mark" aria-hidden="true"></span>Privacy Chat</a>
     {% if owner_name %}
     <nav class="nav" aria-label="Dashboard navigation">
       <a href="/">Overview</a>
-      <a href="/campaigns">Campaigns</a>
-      <a href="/tasks">Tasks</a>
-      <a href="/categories">Categories</a>
-      <a href="/task-import">Import JSON</a>
-      <a href="/submissions">Submissions</a>
-      <a href="/reviews">Reviews</a>
-      <a href="/users">Users</a>
       <a href="/devices">Devices</a>
-      <a href="/coin-ledger">Coin Ledger</a>
-      <a href="/analytics">Analytics</a>
       <a href="/settings">Settings</a>
       <form class="inline" method="post" action="/logout">
         <input type="hidden" name="csrf_token" value="{{ csrf_token }}">

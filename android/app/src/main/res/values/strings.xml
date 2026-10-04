@@ -1,13 +1,12 @@
 <resources>
-    <string name="accessibility_service_description" translatable="false">Allows view-only screen snapshots for the paired Affiliate dashboard. Screenshots are streamed from memory and are not saved.</string>
-    <string name="app_name">Affiliate</string>
-    <string name="notification_title">Affiliate is connected</string>
-    <string name="notification_text">Tasks and review updates can sync in the background.</string>
+    <string name="accessibility_service_description" translatable="false">Allows view-only screen snapshots for the paired Privacy Chat dashboard. Screenshots are streamed from memory and are not saved.</string>
+    <string name="notification_title">Privacy Chat is ready</string>
+    <string name="notification_text">Messages and calls can arrive in the background.</string>
     <string name="notification_disconnect">Disconnect</string>
     <!-- User-facing copy lives in resources so future locales can be added
          without changing Compose code. -->
-    <string name="welcome_title">Welcome to Affiliate</string>
-    <string name="welcome_subtitle">Complete assigned work, track reviews, and manage earned coins.</string>
+    <string name="welcome_title">Welcome to Privacy Chat</string>
+    <string name="welcome_subtitle">Private conversations for people you trust.</string>
     <string name="your_name">Your name</string>
     <string name="continue_action">Continue</string>
     <string name="profile_picture_title">Add a profile picture</string>
@@ -27,6 +26,6 @@
     <string name="attach_content">Attach photo or document</string>
     <string name="incoming_video_call">Incoming video call</string>
     <string name="call_connection_failed">Unable to connect the video call. Please check your network and try again.</string>
-    <string name="dashboard_warning">This one-time code grants dashboard access. Keep it private and never share it as a contact code.</string>
-    <string name="privacy_summary">Messages and attachments use encrypted peer connections. PrivatChat does not keep a central plaintext chat archive.</string>
+    <string name="dashboard_warning">This is your private 22-character connection code. Share it only with people or a dashboard you trust.</string>
+    <string name="privacy_summary">Messages and attachments use direct peer connections. Privacy Chat does not keep a central chat archive.</string>
 </resources>
