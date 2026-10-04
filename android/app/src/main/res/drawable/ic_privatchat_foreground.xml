@@ -1,9 +1,0 @@
-<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="108" android:viewportHeight="108">
-    <!-- Affiliate mark: one assignment card with a connected three-node work graph. -->
-    <path android:fillColor="#FFFFFF" android:pathData="M25,17 L75,17 C82,17 87,22 87,29 L87,79 C87,86 82,91 75,91 L25,91 C18,91 13,86 13,79 L13,29 C13,22 18,17 25,17 Z" />
-    <path android:fillColor="#315EEB" android:pathData="M31,34 L69,34 L69,40 L31,40 Z M31,50 L55,50 L55,56 L31,56 Z M31,66 L49,66 L49,72 L31,72 Z" />
-    <path android:fillColor="#7658E8" android:pathData="M68,49 A7,7 0,1 1,67.9 49 Z M63,70 A7,7 0,1 1,62.9 70 Z M79,70 A7,7 0,1 1,78.9 70 Z M67,55 L64,64 L68,66 L72,57 Z M72,56 L76,64 L80,62 L76,53 Z M69,70 L73,70 L73,73 L69,73 Z" />
-</vector>

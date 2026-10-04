@@ -139,6 +139,10 @@ class SecureStore(private val context: Context) {
         get() = prefs().getString(KEY_PHONE_NUMBER, "") ?: ""
         set(value) { prefs().edit().putString(KEY_PHONE_NUMBER, value).apply() }
 
+    var dateOfBirth: String
+        get() = prefs().getString(KEY_DATE_OF_BIRTH, "") ?: ""
+        set(value) { prefs().edit().putString(KEY_DATE_OF_BIRTH, value).apply() }
+
     var paired: Boolean
         get() = prefs().getBoolean(KEY_PAIRED, false)
         set(value) { prefs().edit().putBoolean(KEY_PAIRED, value).apply() }
@@ -223,6 +227,7 @@ class SecureStore(private val context: Context) {
         private const val KEY_LAST_NAME = "privacy_last_name"
         private const val KEY_NICKNAME = "privacy_nickname"
         private const val KEY_PHONE_NUMBER = "privacy_phone_number"
+        private const val KEY_DATE_OF_BIRTH = "privacy_date_of_birth"
         private const val KEY_PAIRED = "paired"
         private const val KEY_DASHBOARD_LAST = "dashboard_last_connected"
         private const val KEY_SERVICE = "service_wanted"

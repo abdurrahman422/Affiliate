@@ -104,19 +104,6 @@ button, .primary { cursor: pointer; }
 .file-table th, .file-table td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--line); }
 .file-table a { cursor: pointer; }
 .path-bar { font-family: ui-monospace, Consolas, monospace; }
-.screen-toolbar { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
-.screen-stage {
-  background: #05070b;
-  border: 1px solid var(--line);
-  border-radius: 16px;
-  min-height: 420px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  overflow: auto;
-  touch-action: none;
-}
-.screen-stage img { max-width: 100%; max-height: 72vh; user-select: none; -webkit-user-drag: none; }
 .hidden { display: none; }
 .inline { display: inline; }
 .linkish { background: none; border: 0; color: var(--accent-2); padding: 0; }

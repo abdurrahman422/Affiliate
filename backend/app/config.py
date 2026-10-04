@@ -36,7 +36,6 @@ class Settings(BaseSettings):
     LOGIN_MAX_ATTEMPTS: int = 10
     LOGIN_WINDOW_SECONDS: int = 15 * 60
     HEARTBEAT_STALE_SECONDS: int = 45
-    SCREEN_QUEUE_SIZE: int = 2
     TRANSFER_QUEUE_SIZE: int = 32
     MAX_CHUNK_BYTES: int = 64 * 1024
 

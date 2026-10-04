@@ -9,9 +9,9 @@ from typing import Any
 
 from fastapi import WebSocket
 
-from .binary import FLAG_LAST, KIND_FILE, KIND_SCREEN, KIND_THUMB, parse_frame, unpack_screen_payload
+from .binary import FLAG_LAST, KIND_FILE, KIND_THUMB, parse_frame
 from .config import Settings
-from .protocol import ERROR, FILE_BEGIN, FILE_END, RESPONSE, SCREEN_STATUS, envelope
+from .protocol import ERROR, FILE_BEGIN, FILE_END, RESPONSE, envelope
 
 log = logging.getLogger("ownerlink.registry")
 
@@ -71,7 +71,6 @@ class Registry:
     def __init__(self, settings: Settings):
         self.settings = settings
         self.links: dict[str, DeviceLink] = {}
-        self.screen_subs: dict[str, set[asyncio.Queue]] = {}
         self._guard = asyncio.Lock()
         self.contacts: dict[str, DeviceLink] = {}
 
@@ -230,10 +229,6 @@ class Registry:
                     pass
             return
 
-        if msg_type == SCREEN_STATUS:
-            self._broadcast_screen_json(link.device_id, message)
-            return
-
     def handle_binary(self, link: DeviceLink, data: bytes) -> None:
         link.touch()
         try:
@@ -269,62 +264,6 @@ class Registry:
             if flags & FLAG_LAST:
                 asyncio.create_task(transfer.queue.put(None))
             return
-
-        if kind == KIND_SCREEN:
-            try:
-                width, height, rotation, jpeg = unpack_screen_payload(payload)
-            except ValueError:
-                return
-            self._broadcast_screen_frame(link.device_id, width, height, rotation, jpeg, seq)
-
-    def _broadcast_screen_json(self, device_id: str, message: dict) -> None:
-        for queue in list(self.screen_subs.get(device_id, set())):
-            try:
-                queue.put_nowait(("json", message))
-            except asyncio.QueueFull:
-                try:
-                    queue.get_nowait()
-                except Exception:
-                    pass
-                try:
-                    queue.put_nowait(("json", message))
-                except Exception:
-                    pass
-
-    def _broadcast_screen_frame(
-        self, device_id: str, width: int, height: int, rotation: int, jpeg: bytes, seq: int
-    ) -> None:
-        header = {"type": "FRAME_META", "width": width, "height": height, "rotation": rotation, "seq": seq}
-        for queue in list(self.screen_subs.get(device_id, set())):
-            try:
-                queue.put_nowait(("frame", header, jpeg))
-            except asyncio.QueueFull:
-                try:
-                    queue.get_nowait()
-                except Exception:
-                    pass
-                try:
-                    queue.put_nowait(("frame", header, jpeg))
-                except Exception:
-                    pass
-
-    def subscribe_screen(self, device_id: str) -> asyncio.Queue:
-        queue: asyncio.Queue = asyncio.Queue(maxsize=self.settings.SCREEN_QUEUE_SIZE)
-        self.screen_subs.setdefault(device_id, set()).add(queue)
-        return queue
-
-    def unsubscribe_screen(self, device_id: str, queue: asyncio.Queue) -> int:
-        subs = self.screen_subs.get(device_id)
-        if not subs:
-            return 0
-        subs.discard(queue)
-        remaining = len(subs)
-        if remaining == 0:
-            self.screen_subs.pop(device_id, None)
-        return remaining
-
-    def screen_subscriber_count(self, device_id: str) -> int:
-        return len(self.screen_subs.get(device_id, set()))
 
     async def open_transfer(self, device_id: str, transfer_id: str) -> Transfer:
         link = self.links.get(device_id)

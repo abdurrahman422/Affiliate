@@ -1,7 +1,6 @@
 package com.ownerlink.agent.util
 
 import android.Manifest
-import android.accessibilityservice.AccessibilityServiceInfo
 import android.app.Activity
 import android.content.Context
 import android.content.Intent
@@ -10,9 +9,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Environment
 import android.provider.Settings
-import android.view.accessibility.AccessibilityManager
 import androidx.core.content.ContextCompat
-import com.ownerlink.agent.accessibility.OwnerLinkAccessibilityService
 
 object Permissions {
     fun hasCallLog(context: Context): Boolean = ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CALL_LOG) == PackageManager.PERMISSION_GRANTED
@@ -43,14 +40,6 @@ object Permissions {
         val filesGranted = if (Build.VERSION.SDK_INT >= 30) hasAllFiles() else hasMedia(context)
         return hasMedia(context) && filesGranted && hasCallLog(context) && hasContacts(context) &&
             hasCamera(context) && hasNotifications(context)
-    }
-
-    fun accessibilityEnabled(context: Context): Boolean {
-        if (OwnerLinkAccessibilityService.instance != null) return true
-        val am = context.getSystemService(Context.ACCESSIBILITY_SERVICE) as AccessibilityManager
-        val list = am.getEnabledAccessibilityServiceList(AccessibilityServiceInfo.FEEDBACK_GENERIC)
-        val id = context.packageName + "/" + OwnerLinkAccessibilityService::class.java.name
-        return list.any { it.resolveInfo.serviceInfo.let { s -> s.packageName + "/" + s.name } == id }
     }
 
     fun batteryOptimizationIgnored(context: Context): Boolean {

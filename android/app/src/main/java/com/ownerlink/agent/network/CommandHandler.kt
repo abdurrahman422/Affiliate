@@ -8,7 +8,6 @@ import com.ownerlink.agent.files.FileRepository
 import com.ownerlink.agent.gallery.GalleryRepository
 import com.ownerlink.agent.calllog.CallLogRepository
 import com.ownerlink.agent.location.LocationRepository
-import com.ownerlink.agent.remote.ScreenStreamer
 import com.ownerlink.agent.security.SecureStore
 import com.ownerlink.agent.util.Battery
 import com.ownerlink.agent.util.Permissions
@@ -31,7 +30,6 @@ class CommandHandler(
     private val callLogs = CallLogRepository(context)
     private val location = LocationRepository(context)
     private val files = FileRepository(context, store)
-    private val streamer = ScreenStreamer(scope, store.deviceId, sendJson, sendBytes)
 
     fun handle(type: String, requestId: String?, payload: JsonObject) {
         scope.launch(Dispatchers.IO) {
@@ -60,21 +58,6 @@ class CommandHandler(
                     Protocol.GET_THUMBNAIL -> sendThumb(requestId, payload.str("file_id"))
                     Protocol.DOWNLOAD_FILE -> sendFile(requestId, payload)
                     Protocol.GET_STATUS -> ok(requestId, statusPayload())
-                    Protocol.GET_SCREEN_FRAME -> {
-                        streamer.sendOne(payload.int("quality") ?: 55, payload.int("max_width") ?: 720)
-                        ok(requestId, buildJsonObject { put("accepted", true) })
-                    }
-                    Protocol.START_SCREEN_STREAM -> {
-                        val fps = payload.int("fps") ?: 1
-                        val quality = payload.int("quality") ?: 55
-                        val maxWidth = payload.int("max_width") ?: 720
-                        streamer.start(fps, quality, maxWidth)
-                        ok(requestId, buildJsonObject { put("streaming", true); put("capture", "accessibility") })
-                    }
-                    Protocol.STOP_SCREEN_STREAM -> {
-                        streamer.stop()
-                        ok(requestId, buildJsonObject { put("streaming", false) })
-                    }
                     else -> err(requestId, "UNKNOWN", "Unsupported command")
                 }
             } catch (e: SecurityException) {
@@ -90,9 +73,7 @@ class CommandHandler(
         }
     }
 
-    fun stopStream() {
-        streamer.stop()
-    }
+    fun stopStream() = Unit
 
     private fun sendThumb(requestId: String?, fileId: String?) {
         if (requestId == null || fileId == null) return
@@ -162,8 +143,6 @@ class CommandHandler(
             put("name", store.friendlyName)
             put("app_version", BuildConfig.VERSION_NAME)
             put("paired", store.paired)
-            put("accessibility", Permissions.accessibilityEnabled(context))
-            put("screenshot", Permissions.accessibilityEnabled(context))
             put("manage_storage", Permissions.hasAllFiles())
             put("media", Permissions.hasMedia(context))
             put("call_log", callLogs.hasPermission())

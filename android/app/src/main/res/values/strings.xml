@@ -1,5 +1,4 @@
 <resources>
-    <string name="accessibility_service_description" translatable="false">Allows view-only screen snapshots for the paired Privacy Chat dashboard. Screenshots are streamed from memory and are not saved.</string>
     <string name="notification_title">Privacy Chat is ready</string>
     <string name="notification_text">Messages and calls can arrive in the background.</string>
     <string name="notification_disconnect">Disconnect</string>
